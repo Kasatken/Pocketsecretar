@@ -1,0 +1,57 @@
+.footer {
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--s3) var(--s3) calc(var(--s2) + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 0.5rem;
+  border-top: 1px solid rgba(26, 39, 68, 0.1);
+}
+
+.footer.marketing {
+  border-top: none;
+  padding: 0;
+  max-width: none;
+}
+
+.legal {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 0.5rem;
+}
+
+.link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.dot {
+  user-select: none;
+  opacity: 0.55;
+}
+
+.tagline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.heart {
+  color: var(--accent);
+  flex-shrink: 0;
+}

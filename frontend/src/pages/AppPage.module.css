@@ -1,0 +1,1222 @@
+/* Сегодня: плотнее по вертикали + отсылки к UI Metaphor ReFantazio:
+   тёмно-синий «панельный» контраст, золотая кайма, угловые скобы, пергамент. */
+:root {
+  --bg: #e5f5ec;
+  --card: #ffffff;
+  --text: #1a1a1a;
+  --muted: #6b6b6b;
+  --accent: #188a00;
+  --dark: #0d6b00;
+  --gbg: rgba(24, 138, 0, 0.07);
+  --gborder: rgba(24, 138, 0, 0.22);
+  --border: #e5e2de;
+  /* Metaphor-adjacent */
+  --royal: #1a2744;
+  --royal-soft: rgba(26, 39, 68, 0.08);
+  --gold: #c9a227;
+  --gold-dark: #8f7319;
+  --gold-line: rgba(201, 162, 39, 0.42);
+  --s1: 0.382rem;
+  --s2: 0.618rem;
+  --s3: 1rem;
+  --s4: 1.618rem;
+  --s5: 2.618rem;
+}
+
+/* Раньше здесь были @property --gauge-on-* для анимации; градиент сегментов теперь inline — блок удалён. */
+
+.page {
+  position: relative;
+  z-index: 0;
+  -webkit-font-smoothing: antialiased;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+/* Две колонки ~60% / ~40%, высота ряда = доступная высота окна (без «разрыва» снизу) */
+.todayLayout {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--s2);
+  align-items: stretch;
+  max-height: calc(100dvh - 10.5rem);
+}
+
+.todayLeft {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.todayLeft > .hero,
+.todayLeft > .nextStrip,
+.todayLeft > .kineticRule,
+.todayLeft > .dayGauge {
+  flex-shrink: 0;
+}
+
+.todayRight {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  height: 100%;
+}
+
+/*
+ * Слева: узкая колонка Pomodoro + Прогресс столбиком, справа AI на всю ширину и высоту ряда.
+ */
+.leftMidRow {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(228px, 1.32fr) minmax(0, 1.68fr);
+  gap: var(--s3);
+  align-items: stretch;
+  min-width: 0;
+}
+
+.leftTimerProgressCol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  min-width: 0;
+  min-height: 0;
+}
+
+.leftTimerProgressCol > .card {
+  flex: 0 0 auto;
+}
+
+.leftMidRow > .aiAdviceCard {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.leftTimerProgressCol .timer {
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.leftTimerProgressCol .progress {
+  flex: 0 0 auto;
+  justify-content: flex-start;
+}
+
+/* Чуть крупнее кольцо и воздух между кольцом, подписью и кнопками */
+.leftTimerProgressCol .timerRingWrap {
+  width: 112px;
+  height: 112px;
+  max-width: 112px;
+}
+
+.leftTimerProgressCol .timerDisplay {
+  font-size: 1.32rem;
+}
+
+.leftTimerProgressCol .timerBody {
+  gap: var(--s2);
+}
+
+.leftTimerProgressCol .timerSide {
+  gap: 0.5rem;
+}
+
+.leftTimerProgressCol .timerActions {
+  gap: 0.5rem 0.85rem;
+}
+
+.leftTimerProgressCol .timerStatus {
+  max-width: 14rem;
+}
+
+.aiAdviceCard {
+  min-height: 0;
+}
+
+.aiAdviceBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Совет заполняет карточку по высоте; переполнение — только внутри блока текста */
+.leftMidRow .aiAdviceBody .aiHint {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tasksCard {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tasksScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 2px;
+}
+
+.tasksCard > .cardHeader {
+  flex-shrink: 0;
+}
+
+.tasksCard > .cardFooter {
+  flex-shrink: 0;
+}
+
+/* ── Герой: компактный «декрет» с угловыми скобами ── */
+.hero {
+  position: relative;
+  margin-bottom: 0;
+  padding: var(--s2) var(--s3) var(--s3);
+  border: 2px solid var(--text);
+  border-radius: 8px;
+  background:
+    linear-gradient(155deg, var(--royal-soft) 0%, transparent 50%),
+    linear-gradient(180deg, rgba(201, 162, 39, 0.11) 0%, transparent 36%),
+    var(--card);
+  box-shadow:
+    3px 3px 0 0 var(--text),
+    inset 0 0 0 1px var(--gold-line);
+}
+
+.hero::before,
+.hero::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.hero::before {
+  top: 8px;
+  left: 8px;
+  border-top: 2px solid var(--gold);
+  border-left: 2px solid var(--gold);
+}
+
+.hero::after {
+  bottom: 8px;
+  right: 8px;
+  border-bottom: 2px solid var(--gold);
+  border-right: 2px solid var(--gold);
+}
+
+.eyebrow {
+  font-size: 0.618rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--royal);
+  margin-bottom: var(--s2);
+}
+
+.h1 {
+  font-family: 'Merriweather', Georgia, serif;
+  font-weight: 900;
+  font-size: 1.75rem;
+  line-height: 1.18;
+  letter-spacing: -0.04em;
+  color: var(--text);
+  margin-bottom: var(--s2);
+}
+
+.accent {
+  color: var(--accent);
+}
+
+.lead {
+  font-size: 0.94rem;
+  line-height: 1.45;
+  color: var(--muted);
+  max-width: none;
+}
+
+/* Метаданные «журнала дня» (фаза суток + запись) — в духе тегов состояния Metaphor */
+.heroMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s2);
+  margin-top: var(--s2);
+  padding-top: var(--s2);
+  border-top: 1px solid rgba(26, 39, 68, 0.1);
+}
+
+.phaseTag {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--royal);
+  border: 1.5px solid var(--text);
+  padding: 0.2rem 0.45rem;
+  border-radius: 2px;
+  box-shadow: 2px 2px 0 0 var(--text);
+}
+
+.metaSlash {
+  color: var(--gold-dark);
+  font-weight: 900;
+  font-size: 1rem;
+  line-height: 1;
+  user-select: none;
+  opacity: 0.7;
+}
+
+.metaJournal {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+/* «Ресурс дня» — 12 сегментов, похоже на калиброванные шкалы в бою (MAG / ход боя) */
+.dayGauge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  padding: var(--s2) var(--s3);
+  background: rgba(26, 39, 68, 0.04);
+  border: 1.5px dashed rgba(26, 39, 68, 0.22);
+  border-radius: 6px;
+}
+
+.dayGaugeCaption {
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--royal);
+  white-space: nowrap;
+}
+
+.dayGaugeTrack {
+  display: flex;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dayGaugeSeg {
+  flex: 1;
+  height: 10px;
+  min-width: 4px;
+  border: 1.5px solid var(--text);
+  border-radius: 2px;
+  background: var(--card);
+  opacity: 0.55;
+  transition: background 0.25s, opacity 0.25s, box-shadow 0.25s;
+}
+
+.dayGaugeSegOn {
+  opacity: 1;
+  /* Фактический градиент задаётся inline в AppPage (время суток), здесь — запасной тон на случай без style */
+  background: linear-gradient(180deg, var(--gold) 0%, var(--accent) 100%);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.12);
+  transition: opacity 0.25s, box-shadow 0.25s, background 0.35s ease-out;
+}
+
+/* Кинетическая полоса — диагональный ритм как в Persona / Metaphor UI */
+.kineticRule {
+  height: 5px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(
+    -36deg,
+    var(--text) 0,
+    var(--text) 8px,
+    var(--gold) 8px,
+    var(--gold) 15px,
+    var(--royal) 15px,
+    var(--royal) 22px
+  );
+  opacity: 0.92;
+}
+
+/* ── Следующее событие ── */
+.nextStrip {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  background:
+    linear-gradient(90deg, rgba(26, 39, 68, 0.06) 0%, transparent 55%),
+    var(--card);
+  border: 2px solid var(--text);
+  border-radius: 8px;
+  box-shadow:
+    3px 3px 0 0 var(--text),
+    inset 0 0 0 1px var(--gold-line);
+}
+
+.nextStripDot {
+  width: 8px;
+  min-width: 8px;
+  margin: var(--s1) 0;
+  background: linear-gradient(180deg, var(--gold) 0%, var(--accent) 100%);
+  border: 1.5px solid var(--text);
+  border-radius: 3px;
+  align-self: stretch;
+  animation: stripGlow 2.2s ease-in-out infinite;
+}
+
+@keyframes stripGlow {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.35);
+  }
+  50% {
+    opacity: 0.9;
+    box-shadow: 0 0 0 3px rgba(24, 138, 0, 0.14);
+  }
+}
+
+.nextStripInner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  flex: 1;
+  min-width: 0;
+}
+
+.nextStripLabel {
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--royal);
+  background: rgba(201, 162, 39, 0.14);
+  border: 1.5px solid var(--gold-dark);
+  border-radius: 999px;
+  padding: 0.2rem 0.45rem;
+}
+
+.nextStripTitle {
+  font-weight: 700;
+  font-size: 0.92rem;
+  flex: 1 1 10rem;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.nextStripTime {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.card {
+  position: relative;
+  background:
+    linear-gradient(145deg, rgba(201, 162, 39, 0.06) 0%, transparent 42%),
+    var(--card);
+  border: 2px solid var(--text);
+  border-radius: 8px;
+  box-shadow:
+    3px 3px 0 0 var(--text),
+    inset 0 0 0 1px var(--gold-line);
+  padding: var(--s3) var(--s3);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.card:hover {
+  transform: translate(-1px, -1px);
+  box-shadow:
+    4px 4px 0 0 var(--dark),
+    inset 0 0 0 1px rgba(201, 162, 39, 0.55);
+}
+
+.cardWide {
+  grid-column: 1 / -1;
+}
+
+/* Компактная пара карточек в одной строке сетки */
+.timerCard,
+.progressCard,
+.aiAdviceCard {
+  padding-top: var(--s2);
+  padding-bottom: var(--s2);
+}
+
+.timerCard .cardHeader,
+.progressCard .cardHeader,
+.aiAdviceCard .cardHeader {
+  margin-bottom: var(--s1);
+  padding-bottom: var(--s1);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-bottom: var(--s2);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid rgba(26, 39, 68, 0.12);
+}
+
+.cardIcon {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: linear-gradient(145deg, rgba(201, 162, 39, 0.18) 0%, var(--gbg) 100%);
+  border: 1.5px solid var(--gold-dark);
+  border-radius: 6px;
+  color: var(--royal);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.cardTitle {
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--royal);
+  line-height: 1.2;
+}
+
+.aiAdviceHeader {
+  flex-wrap: nowrap;
+  gap: var(--s2);
+}
+
+.aiAdviceHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  flex: 1;
+}
+
+.aiAdviceHeaderLeft .cardTitle {
+  flex: 1;
+  min-width: 0;
+}
+
+.aiAdviceRefreshBtn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1.5px solid var(--gold-dark);
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(201, 162, 39, 0.12) 100%);
+  color: var(--royal);
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.aiAdviceRefreshBtn:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.aiAdviceRefreshBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.aiAdviceRefreshBtn svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) 0 var(--s1);
+}
+
+.emptyText {
+  font-size: 0.88rem;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.45;
+}
+
+.addBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 var(--s3);
+  background: linear-gradient(180deg, #1faa08 0%, var(--accent) 100%);
+  color: #fff;
+  border: 2px solid var(--text);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 0 var(--text);
+  transition: transform 0.1s, box-shadow 0.12s;
+  text-decoration: none;
+}
+
+.addBtn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 0 var(--dark);
+}
+
+.addBtn:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.muted {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.warn {
+  font-size: 0.875rem;
+  color: #a63a00;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.textLink {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--royal);
+  text-decoration: none;
+  align-self: flex-start;
+  border-bottom: 1px solid transparent;
+}
+
+.textLink:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.taskList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.taskRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--s2);
+  align-items: start;
+  padding: var(--s3) var(--s3);
+  min-height: 3.25rem;
+  border: 2px solid var(--text);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(201, 162, 39, 0.05) 0%, transparent 40%),
+    var(--card);
+  box-shadow: 1px 1px 0 0 var(--gold-dark);
+}
+
+.taskCheckboxBtn {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  align-self: start;
+  margin-top: 0.18rem;
+}
+
+.taskCheckboxBtn:not(:disabled):hover {
+  border-color: var(--accent);
+}
+
+.taskRow .taskMain {
+  padding-top: 0.05rem;
+}
+
+.taskRowSpace {
+  opacity: 0.82;
+  border-style: dashed;
+}
+
+.taskTitleRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.taskSpaceGhostHint {
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.taskActions {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  align-items: flex-start;
+  flex-shrink: 0;
+}
+
+.taskIconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  padding: 0;
+  color: var(--royal);
+  background: rgba(26, 39, 68, 0.04);
+  border: 2px solid var(--text);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.taskIconBtn:hover:not(:disabled) {
+  background: rgba(24, 138, 0, 0.1);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.taskIconBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.taskOrder {
+  font-family: 'Merriweather', Georgia, serif;
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1.15;
+  color: var(--gold-dark);
+  text-align: center;
+  padding-top: 0.15rem;
+}
+
+.taskMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.taskTitle {
+  font-weight: 700;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.taskTitleDone {
+  text-decoration: line-through;
+  opacity: 0.72;
+}
+
+.taskTime {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .taskRow {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .taskCheckboxBtn {
+    align-self: start;
+    margin-top: 0.2rem;
+  }
+
+  .taskRow .taskMain {
+    align-self: start;
+  }
+
+  .taskActions {
+    align-self: start;
+    margin-top: 0.15rem;
+  }
+}
+
+.cardFooter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid rgba(26, 39, 68, 0.14);
+}
+
+.timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+}
+
+.timerBody {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.timerSide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.timerPhaseWork {
+  --timer-arc: #159606;
+  --timer-arc-soft: rgba(21, 150, 6, 0.35);
+  --timer-track: rgba(26, 39, 68, 0.11);
+  --timer-dot-on: #159606;
+  --timer-dot-off-border: rgba(26, 39, 68, 0.28);
+}
+
+.timerPhaseShort {
+  --timer-arc: #1c7a96;
+  --timer-arc-soft: rgba(28, 122, 150, 0.38);
+  --timer-track: rgba(26, 39, 68, 0.11);
+  --timer-dot-on: #1c7a96;
+  --timer-dot-off-border: rgba(26, 39, 68, 0.28);
+}
+
+.timerPhaseLong {
+  --timer-arc: #454f9e;
+  --timer-arc-soft: rgba(69, 79, 158, 0.4);
+  --timer-track: rgba(26, 39, 68, 0.11);
+  --timer-dot-on: #454f9e;
+  --timer-dot-off-border: rgba(26, 39, 68, 0.28);
+}
+
+.timerRingWrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 118px;
+  height: 118px;
+  max-width: 118px;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 1px 6px var(--timer-arc-soft));
+}
+
+.timerRingSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.timerRingTrack,
+.timerRingArc {
+  stroke-width: 4.25px;
+}
+
+.timerRingTrack {
+  stroke: var(--timer-track);
+}
+
+.timerRingArc {
+  stroke: var(--timer-arc);
+  transition: stroke-dashoffset 0.35s ease-out;
+}
+
+.timer[data-running='true'] .timerRingArc {
+  animation: timerRingBreath 2.4s ease-in-out infinite;
+}
+
+.timerRingInner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 var(--s1);
+  max-width: 6.5rem;
+}
+
+.timerDisplay {
+  font-family: 'Merriweather', Georgia, serif;
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--royal);
+  line-height: 1;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+  font-variant-numeric: tabular-nums;
+}
+
+.timerSub {
+  margin: 0.2rem 0 0;
+  font-size: 0.58rem;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.timerDots {
+  display: flex;
+  gap: 0.32rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.timerDotOn,
+.timerDotOff {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  border: 1.5px solid var(--timer-dot-off-border);
+  box-sizing: border-box;
+  transition:
+    background 0.2s,
+    transform 0.2s,
+    border-color 0.2s;
+}
+
+.timerDotOn {
+  background: var(--timer-dot-on);
+  border-color: var(--timer-dot-on);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+}
+
+.timerDotOff {
+  background: transparent;
+  opacity: 0.45;
+}
+
+.timerStatus {
+  margin: 0;
+  font-size: 0.65rem;
+  line-height: 1.35;
+  color: var(--muted);
+  text-align: center;
+  max-width: 11rem;
+}
+
+.timerBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 34px;
+  padding: 0 var(--s2);
+  background: linear-gradient(180deg, #1faa08 0%, var(--accent) 100%);
+  color: #fff;
+  border: 2px solid var(--text);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 0 var(--text);
+  transition: transform 0.1s, box-shadow 0.12s;
+}
+
+.timerBtn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 0 var(--dark);
+}
+
+.timerBtn:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.timerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem var(--s2);
+  justify-content: center;
+}
+
+.timerBtnSecondary {
+  min-height: 34px;
+  padding: 0 var(--s2);
+  background: var(--card);
+  color: var(--text);
+  border: 2px solid var(--text);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 0 rgba(143, 115, 25, 0.35);
+  transition: transform 0.1s, box-shadow 0.12s;
+}
+
+.timerBtnSecondary:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 0 var(--text);
+}
+
+.timerBtnSecondary:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+@keyframes timerRingBreath {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timerRingArc {
+    transition: none;
+  }
+
+  .timer[data-running='true'] .timerRingArc {
+    animation: none;
+  }
+
+  .timerDotOn,
+  .timerDotOff {
+    transition: none;
+  }
+}
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.progressThemed {
+  --lp-muted: var(--royal);
+  --lp-text: var(--gold-dark);
+  --lp-track: rgba(26, 39, 68, 0.07);
+  --lp-track-border: var(--text);
+  --lp-gap: var(--s2);
+}
+
+.aiHint {
+  position: relative;
+  padding: var(--s3);
+  padding-left: calc(var(--s3) + 6px);
+  background:
+    linear-gradient(135deg, rgba(26, 39, 68, 0.07) 0%, transparent 55%),
+    rgba(201, 162, 39, 0.08);
+  border: 2px solid var(--gold-dark);
+  border-radius: 8px;
+  box-shadow:
+    inset 6px 0 0 0 var(--royal),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+
+.aiText {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0 0 var(--s2);
+  white-space: pre-line;
+}
+
+.aiGuillemet,
+.aiGuillemetEnd {
+  font-family: 'Merriweather', Georgia, serif;
+  font-weight: 900;
+  color: var(--gold-dark);
+  opacity: 0.85;
+}
+
+.aiGuillemet {
+  margin-right: 0.15em;
+}
+
+.aiGuillemetEnd {
+  margin-left: 0.1em;
+}
+
+@media (max-width: 960px) {
+  .todayLayout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    flex: none;
+    max-height: none;
+    min-height: 0;
+  }
+
+  .todayLeft {
+    overflow-y: visible;
+    flex: none;
+    min-height: 0;
+  }
+
+  .todayRight {
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+    height: auto;
+  }
+
+  .tasksCard {
+    flex: none;
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+    height: auto;
+  }
+
+  .tasksScroll {
+    flex: none;
+    min-height: 0;
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
+  }
+
+  .leftMidRow {
+    grid-template-columns: 1fr;
+    flex: none;
+    min-height: 0;
+  }
+
+  .leftTimerProgressCol .timerRingWrap {
+    width: 118px;
+    height: 118px;
+    max-width: 118px;
+  }
+
+  .leftMidRow .aiAdviceBody .aiHint {
+    max-height: min(50dvh, 18rem);
+    flex: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .shell {
+    gap: var(--s2);
+  }
+
+  .h1 {
+    font-size: 1.45rem;
+  }
+
+  .hero {
+    padding: var(--s2);
+  }
+
+  .card {
+    padding: var(--s3) var(--s2);
+  }
+
+  .timerBody {
+    flex-direction: column;
+    align-items: center;
+    gap: var(--s2);
+  }
+
+  .timerSide {
+    align-items: center;
+    width: 100%;
+  }
+
+  .timerDots {
+    justify-content: center;
+  }
+
+  .timerStatus {
+    text-align: center;
+  }
+
+  .timerActions {
+    justify-content: center;
+  }
+
+  .timerDisplay {
+    font-size: 1.35rem;
+  }
+
+  .timerRingWrap {
+    width: 124px;
+    height: 124px;
+    max-width: 124px;
+  }
+
+  .leftTimerProgressCol .timerRingWrap {
+    width: 124px;
+    height: 124px;
+    max-width: 124px;
+  }
+}

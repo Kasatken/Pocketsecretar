@@ -1,0 +1,63 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lp-gap, 0.618rem);
+}
+
+.wrapInline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(26, 39, 68, 0.12);
+}
+
+.wrapInline .progressHint {
+  font-size: 0.7rem;
+}
+
+.levelRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+}
+
+.levelLabel {
+  font-weight: 800;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lp-muted, #6b6b6b);
+}
+
+.levelXp {
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--lp-text, #1a1a1a);
+}
+
+.progressTrack {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--lp-track, rgba(26, 39, 68, 0.1));
+  overflow: hidden;
+  border: 1px solid var(--lp-track-border, rgba(26, 39, 68, 0.12));
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent, #188a00);
+  transition: width 0.35s ease;
+}
+
+.progressHint {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--lp-muted, #6b6b6b);
+}
