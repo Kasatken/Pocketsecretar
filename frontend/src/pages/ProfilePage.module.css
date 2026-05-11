@@ -1133,3 +1133,57 @@
     justify-content: center;
   }
 }
+
+/* ── Карточка статистики ── */
+.cardStats {
+  background:
+    linear-gradient(145deg, rgba(201, 162, 39, 0.06) 0%, transparent 38%),
+    linear-gradient(155deg, rgba(26, 39, 68, 0.04) 0%, transparent 50%),
+    var(--card);
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s2);
+}
+
+@media (max-width: 600px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.statCell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s3) var(--s2);
+  border: 1.5px solid var(--gold-line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(201, 162, 39, 0.05) 100%);
+  text-align: center;
+}
+
+.statValue {
+  font-family: 'Merriweather', Georgia, serif;
+  font-size: 1.75rem;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--royal);
+  letter-spacing: -0.02em;
+}
+
+.statStreak {
+  color: var(--accent);
+}
+
+.statLabel {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 1.3;
+}

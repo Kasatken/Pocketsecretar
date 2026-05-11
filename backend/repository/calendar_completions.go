@@ -3,9 +3,16 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/lib/pq"
 )
+
+type CompletionStats struct {
+	CompletedWeek  int
+	TotalCompleted int
+	Streak         int
+}
 
 type CalendarCompletionRepository struct {
 	db *sql.DB
@@ -59,4 +66,86 @@ func (r *CalendarCompletionRepository) CompletedEventIDs(ctx context.Context, us
 		out[id] = true
 	}
 	return out, rows.Err()
+}
+
+// GetStats returns completion stats for the user.
+func (r *CalendarCompletionRepository) GetStats(ctx context.Context, userID int64) (CompletionStats, error) {
+	var total, week int
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM calendar_event_completions WHERE user_id = $1`,
+		userID,
+	).Scan(&total); err != nil {
+		return CompletionStats{}, err
+	}
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM calendar_event_completions WHERE user_id = $1 AND completed_at >= NOW() - INTERVAL '7 days'`,
+		userID,
+	).Scan(&week); err != nil {
+		return CompletionStats{}, err
+	}
+
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT DISTINCT DATE(completed_at AT TIME ZONE 'Europe/Moscow')
+		 FROM calendar_event_completions
+		 WHERE user_id = $1 AND completed_at >= NOW() - INTERVAL '365 days'
+		 ORDER BY 1 DESC`,
+		userID,
+	)
+	if err != nil {
+		return CompletionStats{}, err
+	}
+	defer rows.Close()
+
+	var days []time.Time
+	for rows.Next() {
+		var d time.Time
+		if err := rows.Scan(&d); err != nil {
+			return CompletionStats{}, err
+		}
+		days = append(days, d)
+	}
+	if err := rows.Err(); err != nil {
+		return CompletionStats{}, err
+	}
+
+	return CompletionStats{
+		CompletedWeek:  week,
+		TotalCompleted: total,
+		Streak:         calcCompletionStreak(days),
+	}, nil
+}
+
+func calcCompletionStreak(days []time.Time) int {
+	if len(days) == 0 {
+		return 0
+	}
+	loc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		loc = time.UTC
+	}
+	now := time.Now().In(loc)
+	todayUTC := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	yesterdayUTC := todayUTC.AddDate(0, 0, -1)
+
+	// most recent day with completions
+	first := days[0].UTC().Truncate(24 * time.Hour)
+	cursor := todayUTC
+	if !first.Equal(todayUTC) {
+		if !first.Equal(yesterdayUTC) {
+			return 0
+		}
+		cursor = yesterdayUTC
+	}
+
+	streak := 0
+	for _, d := range days {
+		day := d.UTC().Truncate(24 * time.Hour)
+		if day.Equal(cursor) {
+			streak++
+			cursor = cursor.AddDate(0, 0, -1)
+		} else if day.Before(cursor) {
+			break
+		}
+	}
+	return streak
 }

@@ -67,6 +67,17 @@ func (r *SmartTaskRepository) TryIncrementCapped(ctx context.Context, userID int
 	return int(out.Int64), true, nil
 }
 
+// SumForLastDays returns total smart tasks created by the user in the last days days.
+func (r *SmartTaskRepository) SumForLastDays(ctx context.Context, userID int64, days int) (int, error) {
+	since := time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02")
+	var total int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(task_count), 0) FROM user_daily_smart_tasks WHERE user_id = $1 AND day >= $2::date`,
+		userID, since,
+	).Scan(&total)
+	return total, err
+}
+
 // QuotaDayUTC returns today's date string in UTC (YYYY-MM-DD) for rate limiting.
 func QuotaDayUTC() string {
 	return time.Now().UTC().Format("2006-01-02")

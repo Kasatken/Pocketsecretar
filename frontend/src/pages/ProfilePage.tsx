@@ -50,6 +50,15 @@ export default function ProfilePage() {
   const [savingPers, setSavingPers] = useState(false)
   const [xpRank, setXpRank] = useState<XpRankResponse | null>(null)
 
+  type UserStats = {
+    smart_tasks_week: number
+    completed_week: number
+    total_completed: number
+    streak: number
+    hours_saved: number
+  }
+  const [stats, setStats] = useState<UserStats | null>(null)
+
   const quota = user?.smart_tasks_today
   const quotaExhausted =
     user != null && user.plan !== 'pro' && quota != null && quota.used >= quota.limit
@@ -97,6 +106,25 @@ export default function ProfilePage() {
     return () => {
       cancelled = true
     }
+  }, [accessToken])
+
+  useEffect(() => {
+    if (!accessToken) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/auth/me/stats', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          credentials: 'include',
+        })
+        if (!res.ok || cancelled) return
+        const data = (await res.json()) as UserStats
+        if (!cancelled) setStats(data)
+      } catch {
+        /* статистика необязательна */
+      }
+    })()
+    return () => { cancelled = true }
   }, [accessToken])
 
   useEffect(() => {
@@ -522,6 +550,45 @@ export default function ProfilePage() {
             )}
           </div>
         </section>
+
+        {stats !== null && (
+          <section
+            className={`${s.card} ${s.cardStats} ${s.sheetFullRow}`}
+            aria-labelledby="stats-heading"
+          >
+            <div className={s.cardHeader}>
+              <span className={s.cardIcon} aria-hidden>
+                <i className={`fa-solid fa-chart-simple ${s.faCardIcon}`} />
+              </span>
+              <div className={s.cardHeaderText}>
+                <p className={s.cardEyebrow}>Прогресс</p>
+                <h2 id="stats-heading" className={s.cardTitle}>
+                  Статистика
+                </h2>
+              </div>
+            </div>
+            <div className={s.statsGrid}>
+              <div className={s.statCell}>
+                <span className={s.statValue}>{stats.smart_tasks_week}</span>
+                <span className={s.statLabel}>задач создано за неделю</span>
+              </div>
+              <div className={s.statCell}>
+                <span className={s.statValue}>{stats.completed_week}</span>
+                <span className={s.statLabel}>выполнено за неделю</span>
+              </div>
+              <div className={s.statCell}>
+                <span className={`${s.statValue} ${stats.streak > 0 ? s.statStreak : ''}`}>
+                  {stats.streak > 0 ? `🔥 ${stats.streak}` : stats.streak}
+                </span>
+                <span className={s.statLabel}>дней подряд</span>
+              </div>
+              <div className={s.statCell}>
+                <span className={s.statValue}>~{stats.hours_saved.toFixed(1)}</span>
+                <span className={s.statLabel}>часов сэкономлено</span>
+              </div>
+            </div>
+          </section>
+        )}
 
         <section
           className={`${s.card} ${s.cardPromo} ${s.promoFullRow}`}

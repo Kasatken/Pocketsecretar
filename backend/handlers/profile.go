@@ -130,6 +130,36 @@ func (h *AuthHandler) meGet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// MeStats GET /api/auth/me/stats — статистика активности пользователя.
+func (h *AuthHandler) MeStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	compStats, err := h.completions.GetStats(r.Context(), userID)
+	if err != nil {
+		http.Error(w, "failed to fetch stats", http.StatusInternalServerError)
+		return
+	}
+	tasksWeek, err := h.smartTasks.SumForLastDays(r.Context(), userID, 7)
+	if err != nil {
+		http.Error(w, "failed to fetch stats", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"smart_tasks_week": tasksWeek,
+		"completed_week":   compStats.CompletedWeek,
+		"total_completed":  compStats.TotalCompleted,
+		"streak":           compStats.Streak,
+		"hours_saved":      float64(compStats.TotalCompleted) * 0.75,
+	})
+}
+
 // MeXpRank GET /api/auth/me/xp-rank — место пользователя в общем рейтинге по experience_points.
 func (h *AuthHandler) MeXpRank(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

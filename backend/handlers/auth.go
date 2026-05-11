@@ -25,6 +25,7 @@ type AuthHandler struct {
 	limiter      *middleware.RateLimiter
 	promoLimiter *middleware.RateLimiter
 	smartTasks   *repository.SmartTaskRepository
+	completions  *repository.CalendarCompletionRepository
 }
 
 type credentials struct {
@@ -38,7 +39,7 @@ type registerPayload struct {
 	DisplayName string `json:"display_name"`
 }
 
-func NewAuthHandler(users *repository.UserRepository, tokens *security.TokenManager, cfg config.Config, smartTasks *repository.SmartTaskRepository) *AuthHandler {
+func NewAuthHandler(users *repository.UserRepository, tokens *security.TokenManager, cfg config.Config, smartTasks *repository.SmartTaskRepository, completions *repository.CalendarCompletionRepository) *AuthHandler {
 	return &AuthHandler{
 		users:        users,
 		tokens:       tokens,
@@ -46,6 +47,7 @@ func NewAuthHandler(users *repository.UserRepository, tokens *security.TokenMana
 		limiter:      middleware.NewRateLimiter(12, time.Minute),
 		promoLimiter: middleware.NewRateLimiter(10, time.Minute),
 		smartTasks:   smartTasks,
+		completions:  completions,
 	}
 }
 
