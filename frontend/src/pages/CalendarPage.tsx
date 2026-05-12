@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { useEffect, useId, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Check, Loader2, Trash2 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
@@ -187,6 +187,8 @@ export default function CalendarPage() {
   const modalCloseRef = useRef<HTMLButtonElement>(null)
   const smartModalCloseRef = useRef<HTMLButtonElement>(null)
   const presetsModalCloseRef = useRef<HTMLButtonElement>(null)
+
+  const navigateToLogin = useCallback(() => navigate('/login', { replace: true }), [navigate])
 
   const { gridStart, gridEnd } = useMemo(() => {
     if (view === 'month') {
@@ -1342,7 +1344,7 @@ export default function CalendarPage() {
             onRefreshCalendar={() => setCalTick((x) => x + 1)}
             onModalLockChange={setBacklogModalLock}
             refreshSession={refreshSession}
-            navigateLogin={() => navigate('/login', { replace: true })}
+            navigateLogin={navigateToLogin}
             isPro={isPro}
             smartTasksToday={quota ?? null}
           />

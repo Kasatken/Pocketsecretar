@@ -95,18 +95,23 @@
   gap: var(--s3);
   align-items: stretch;
   min-width: 0;
+  overflow: hidden;
 }
 
 .leftTimerProgressCol {
   display: flex;
   flex-direction: column;
-  gap: var(--s3);
+  gap: var(--s2);
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
 .leftTimerProgressCol > .card {
-  flex: 0 0 auto;
+  /* 0 1 auto — разрешаем карточкам сжиматься при нехватке высоты */
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .leftMidRow > .aiAdviceCard {
@@ -356,21 +361,7 @@
   transition: opacity 0.25s, box-shadow 0.25s, background 0.35s ease-out;
 }
 
-/* Кинетическая полоса — диагональный ритм как в Persona / Metaphor UI */
-.kineticRule {
-  height: 5px;
-  border-radius: 2px;
-  background: repeating-linear-gradient(
-    -36deg,
-    var(--text) 0,
-    var(--text) 8px,
-    var(--gold) 8px,
-    var(--gold) 15px,
-    var(--royal) 15px,
-    var(--royal) 22px
-  );
-  opacity: 0.92;
-}
+/* kineticRule удалён — освобождает высоту для leftMidRow */
 
 /* ── Следующее событие ── */
 .nextStrip {
@@ -682,6 +673,24 @@
 
 .taskCheckboxBtn:not(:disabled):hover {
   border-color: var(--accent);
+  background: rgba(24, 138, 0, 0.06);
+}
+
+/* Галочка: невидима по умолчанию, полупрозрачна при наведении, полная при выполнении */
+.checkHover {
+  opacity: 0;
+  color: var(--accent);
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.taskCheckboxBtn:not(:disabled):hover .checkHover {
+  opacity: 0.35;
+}
+
+.checkDone {
+  color: var(--accent);
+  opacity: 1;
 }
 
 .taskRow .taskMain {
@@ -1109,25 +1118,36 @@
 }
 
 @media (max-width: 960px) {
+  /* Переключаем с grid на flex-колонку — нужно для управления порядком через order */
   .todayLayout {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s2);
     flex: none;
     max-height: none;
     min-height: 0;
+    width: 100%;
   }
 
+  /* display:contents убирает бокс todayLeft — его дети становятся
+     прямыми потомками todayLayout и участвуют в общем порядке */
   .todayLeft {
-    overflow-y: visible;
-    flex: none;
-    min-height: 0;
+    display: contents;
   }
+
+  /* Порядок на мобильном: герой → задачи → дальше → помодоро+AI → ход дня */
+  .hero       { order: 1; }
+  .todayRight { order: 2; }
+  .nextStrip  { order: 3; }
+  .leftMidRow { order: 4; }
+  .dayGauge   { order: 5; }
 
   .todayRight {
     min-height: 0;
     max-height: none;
     overflow: visible;
     height: auto;
+    width: 100%;
   }
 
   .tasksCard {
@@ -1150,6 +1170,8 @@
     grid-template-columns: 1fr;
     flex: none;
     min-height: 0;
+    overflow: hidden;
+    width: 100%;
   }
 
   .leftTimerProgressCol .timerRingWrap {

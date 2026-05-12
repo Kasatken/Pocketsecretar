@@ -1,4 +1,5 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
+import { useEffect, useId, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import type { User } from '../auth/AuthContext'
@@ -49,6 +50,8 @@ export default function ProfilePage() {
   const [persChrono, setPersChrono] = useState('')
   const [savingPers, setSavingPers] = useState(false)
   const [xpRank, setXpRank] = useState<XpRankResponse | null>(null)
+  const [statsHelpOpen, setStatsHelpOpen] = useState(false)
+  const statsHelpTitleId = useId()
 
   type UserStats = {
     smart_tasks_week: number
@@ -551,6 +554,58 @@ export default function ProfilePage() {
           </div>
         </section>
 
+        {statsHelpOpen && createPortal(
+          <div className={s.modalRoot}>
+            <button type="button" className={s.modalBackdrop} aria-label="Закрыть" onClick={() => setStatsHelpOpen(false)} />
+            <div
+              className={s.modalPanel}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={statsHelpTitleId}
+              lang="ru"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <header className={s.modalHeader}>
+                <h2 id={statsHelpTitleId} className={s.modalTitle}>Как считается статистика</h2>
+                <button type="button" className={s.modalClose} onClick={() => setStatsHelpOpen(false)} aria-label="Закрыть">×</button>
+              </header>
+              <div className={s.helpBody}>
+                <ul className={s.helpSteps}>
+                  <li className={s.helpStep}>
+                    <span className={s.helpStepMark} aria-hidden><i className="fa-solid fa-wand-magic-sparkles" /></span>
+                    <div>
+                      <p className={s.helpStepTitle}>Задач создано за неделю</p>
+                      <p className={s.helpStepText}>Количество умных задач, добавленных в Google Календарь за последние 7 дней через ИИ-планировщик.</p>
+                    </div>
+                  </li>
+                  <li className={s.helpStep}>
+                    <span className={s.helpStepMark} aria-hidden><i className="fa-solid fa-circle-check" /></span>
+                    <div>
+                      <p className={s.helpStepTitle}>Выполнено за неделю</p>
+                      <p className={s.helpStepText}>События, отмеченные как выполненные за последние 7 дней. За каждое начисляется 25 XP и повышается уровень.</p>
+                    </div>
+                  </li>
+                  <li className={s.helpStep}>
+                    <span className={s.helpStepMark} aria-hidden><i className="fa-solid fa-fire" /></span>
+                    <div>
+                      <p className={s.helpStepTitle}>Дней подряд (стрик)</p>
+                      <p className={s.helpStepText}>Непрерывная серия дней, в которые вы выполнили хотя бы одно событие. Если пропустить день — стрик обнуляется.</p>
+                    </div>
+                  </li>
+                  <li className={s.helpStep}>
+                    <span className={s.helpStepMark} aria-hidden><i className="fa-solid fa-clock" /></span>
+                    <div>
+                      <p className={s.helpStepTitle}>Часов сэкономлено</p>
+                      <p className={s.helpStepText}>Приблизительная оценка: каждое выполненное событие засчитывается как 0,75 сохранённого часа. Показывает суммарный эффект от планирования.</p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
         {stats !== null && (
           <section
             className={`${s.card} ${s.cardStats} ${s.sheetFullRow}`}
@@ -566,6 +621,15 @@ export default function ProfilePage() {
                   Статистика
                 </h2>
               </div>
+              <button
+                type="button"
+                className={s.helpBtn}
+                aria-label="Как считается статистика"
+                title="Подсказка"
+                onClick={() => setStatsHelpOpen(true)}
+              >
+                <i className="fa-regular fa-circle-question" aria-hidden />
+              </button>
             </div>
             <div className={s.statsGrid}>
               <div className={s.statCell}>

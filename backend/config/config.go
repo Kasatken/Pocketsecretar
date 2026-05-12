@@ -1,6 +1,8 @@
 package config
 
 import (
+	"encoding/hex"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -34,6 +36,10 @@ type Config struct {
 
 	UploadDir      string
 	AvatarMaxBytes int64
+
+	// TokenEncryptionKey — 32-байтовый ключ (64 hex-символа) для AES-256-GCM шифрования
+	// OAuth refresh-токенов в БД. Если не задан, шифрование отключено (dev-режим).
+	TokenEncryptionKey []byte
 }
 
 func Load() Config {
@@ -61,9 +67,25 @@ func Load() Config {
 		FreeSmartTaskLimit: getEnvInt("FREE_SMART_TASK_LIMIT", 3),
 		ProPromoCode:       strings.TrimSpace(os.Getenv("PRO_PROMO_CODE")),
 
-		UploadDir:      getEnv("UPLOAD_DIR", "./uploads"),
-		AvatarMaxBytes: int64(getEnvInt("AVATAR_MAX_BYTES", 2_000_000)),
+		UploadDir:          getEnv("UPLOAD_DIR", "./uploads"),
+		AvatarMaxBytes:     int64(getEnvInt("AVATAR_MAX_BYTES", 2_000_000)),
+		TokenEncryptionKey: parseHexKey(os.Getenv("TOKEN_ENCRYPTION_KEY")),
 	}
+}
+
+// parseHexKey декодирует 64-символьный hex-ключ в 32 байта.
+// Если строка пустая — возвращает nil (шифрование отключено).
+func parseHexKey(s string) []byte {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	b, err := hex.DecodeString(s)
+	if err != nil || len(b) != 32 {
+		log.Printf("WARNING: TOKEN_ENCRYPTION_KEY невалиден (нужно 64 hex-символа) — шифрование токенов отключено")
+		return nil
+	}
+	return b
 }
 
 func getEnv(key, fallback string) string {

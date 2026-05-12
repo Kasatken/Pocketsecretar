@@ -187,7 +187,7 @@ export async function postSmartTask(
   const pollSmartTask = async (jobId: string): Promise<SmartTaskResponse> => {
     const pollUrl = `/api/calendar/smart-task?job=${encodeURIComponent(jobId)}`
     const maxPolls = 240
-    const delayMs = 1500
+    const delayMs = 500
     const pollT0 = performance.now()
     for (let i = 0; i < maxPolls; i++) {
       const pr = await fetch(pollUrl, {

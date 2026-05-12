@@ -123,7 +123,9 @@ func (h *SmartTaskHandler) executeSmartTaskSync(
 	model string,
 	maxTok int,
 ) (okBody map[string]interface{}, errHTTP int, errBody map[string]interface{}) {
+	tLLM := time.Now()
 	content, err := OpenRouterChat(ctx, h.cfg, apiKey, model, maxTok, 0.3, smartTaskSystem, userMsg)
+	log.Printf("[smart-task timing] openrouter_llm=%dms", time.Since(tLLM).Milliseconds())
 	if err != nil {
 		log.Printf("openrouter: %v", err)
 		return nil, http.StatusBadGateway, map[string]interface{}{"detail": err.Error()}
@@ -210,11 +212,13 @@ func (h *SmartTaskHandler) executeSmartTaskSync(
 	httpClient := oauth2.NewClient(googleCtx, ts)
 
 	eventIDs := make([]*string, len(tasks))
+	calendarFailed := 0
 	for i := range tasks {
 		id, err := createGoogleCalendarEvent(googleCtx, httpClient, &tasks[i], "Europe/Moscow")
 		if err != nil {
 			log.Printf("create calendar event: %v", err)
 			eventIDs[i] = nil
+			calendarFailed++
 			continue
 		}
 		eventIDs[i] = &id
@@ -233,6 +237,9 @@ func (h *SmartTaskHandler) executeSmartTaskSync(
 	}
 	if dailyLimitTruncated {
 		out["daily_limit_truncated"] = true
+	}
+	if calendarFailed > 0 {
+		out["google_calendar_warning"] = fmt.Sprintf("Не удалось добавить %d из %d событий в Google Календарь", calendarFailed, len(tasks))
 	}
 	if !isProPlan(plan) {
 		used, _ := h.quota.CountForDay(dbCtx, userID, quotaDay)
@@ -366,41 +373,6 @@ func (h *SmartTaskHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	busyText := h.buildBusySlotsText(r.Context(), userID, todayStr, refresh)
-
-	profileCtx := ""
-	if strings.TrimSpace(user.DisplayName) != "" || strings.TrimSpace(user.Bio) != "" {
-		profileCtx = "\nПрофиль: " + strings.TrimSpace(user.DisplayName) + ". " + strings.TrimSpace(user.Bio)
-	}
-	if note := strings.TrimSpace(user.PersonalizationNote); note != "" || strings.TrimSpace(user.Chronotype) != "" {
-		profileCtx += "\nПерсонализация для планировщика:"
-		if note != "" {
-			profileCtx += " " + note + "."
-		}
-		if c := strings.TrimSpace(user.Chronotype); c != "" {
-			if line := ChronotypePlannerRu(c); line != "" {
-				profileCtx += " " + line + "."
-			}
-		}
-		profileCtx += " Соблюдай персонализацию как занятость: не ставь новые задачи на пересечение с указанными днями/часами (буфер 10 мин), даже если этого слота нет в списке из Google Calendar."
-	}
-	loc, tzErr := time.LoadLocation("Europe/Moscow")
-	if tzErr != nil {
-		loc = time.UTC
-	}
-	nowLocal := time.Now().In(loc)
-	datetimeStr := nowLocal.Format("2006-01-02 15:04")
-	userMsg := fmt.Sprintf(
-		"Текущие дата и время (Europe/Moscow): %s\nОриентир «сегодня» из приложения: %s.%s\n\nЗапрос пользователя:\n%s",
-		datetimeStr,
-		todayStr,
-		profileCtx,
-		text,
-	)
-	if busyText != "" {
-		userMsg = busyText + userMsg
-	}
-
 	model := strings.TrimSpace(h.cfg.OpenRouterModel)
 	if model == "" {
 		model = "openai/gpt-4o-mini"
@@ -426,6 +398,45 @@ func (h *SmartTaskHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.jobs.markRunning(jobID)
 		workCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
+
+		t0 := time.Now()
+		// Строим контекст для AI здесь, чтобы HTTP 202 вернулся немедленно
+		busyText := h.buildBusySlotsText(workCtx, userID, todayStr, refresh)
+		log.Printf("[smart-task timing] google_calendar_fetch=%dms", time.Since(t0).Milliseconds())
+		profileCtx := ""
+		if strings.TrimSpace(user.DisplayName) != "" || strings.TrimSpace(user.Bio) != "" {
+			profileCtx = "\nПрофиль: " + strings.TrimSpace(user.DisplayName) + ". " + strings.TrimSpace(user.Bio)
+		}
+		if note := strings.TrimSpace(user.PersonalizationNote); note != "" || strings.TrimSpace(user.Chronotype) != "" {
+			profileCtx += "\nПерсонализация для планировщика:"
+			if note != "" {
+				profileCtx += " " + note + "."
+			}
+			if c := strings.TrimSpace(user.Chronotype); c != "" {
+				if line := ChronotypePlannerRu(c); line != "" {
+					profileCtx += " " + line + "."
+				}
+			}
+			profileCtx += " Соблюдай персонализацию как занятость: не ставь новые задачи на пересечение с указанными днями/часами (буфер 10 мин), даже если этого слота нет в списке из Google Calendar."
+		}
+		msgLoc, msgTzErr := time.LoadLocation("Europe/Moscow")
+		if msgTzErr != nil {
+			msgLoc = time.UTC
+		}
+		nowLocal := time.Now().In(msgLoc)
+		datetimeStr := nowLocal.Format("2006-01-02 15:04")
+		userMsg := fmt.Sprintf(
+			"Текущие дата и время (Europe/Moscow): %s\nОриентир «сегодня» из приложения: %s.%s\n\nЗапрос пользователя:\n%s",
+			datetimeStr,
+			todayStr,
+			profileCtx,
+			text,
+		)
+		if busyText != "" {
+			userMsg = busyText + userMsg
+		}
+
+		tAI := time.Now()
 		okBody, errHTTP, errBody := h.executeSmartTaskSync(
 			workCtx,
 			userID,
@@ -440,6 +451,8 @@ func (h *SmartTaskHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			model,
 			maxTok,
 		)
+		log.Printf("[smart-task timing] ai_and_gcal_create=%dms total=%dms model=%s",
+			time.Since(tAI).Milliseconds(), time.Since(t0).Milliseconds(), model)
 		if errBody != nil {
 			h.jobs.finishErr(jobID, errHTTP, errBody)
 			return

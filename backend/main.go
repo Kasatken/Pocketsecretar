@@ -33,7 +33,7 @@ func main() {
 	}
 
 	users := repository.NewUserRepository(db)
-	googleLinks := repository.NewGoogleCalendarRepository(db)
+	googleLinks := repository.NewGoogleCalendarRepository(db, cfg.TokenEncryptionKey)
 	backlogIdeas := repository.NewBacklogIdeaRepository(db)
 	smartTaskQuota := repository.NewSmartTaskRepository(db)
 	dailyAdviceCache := repository.NewDailyAdviceRepository(db)

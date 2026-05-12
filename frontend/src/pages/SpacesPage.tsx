@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { createPortal } from 'react-dom'
+import { useEffect, useId, useState, type FormEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { extractInviteToken } from '../lib/inviteLink'
 import { createSpace, fetchSpaces, joinSpaceWithToken, type Space } from '../lib/spacesApi'
@@ -13,7 +14,10 @@ function typeLabel(t: string) {
 }
 
 export default function SpacesPage() {
-  const { accessToken } = useAuth()
+  const { accessToken, refreshSession } = useAuth()
+  const navigate = useNavigate()
+  const [helpOpen, setHelpOpen] = useState(false)
+  const helpModalTitleId = useId()
   const [spaces, setSpaces] = useState<Space[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
@@ -33,6 +37,11 @@ export default function SpacesPage() {
       const rows = await fetchSpaces(accessToken)
       setSpaces(rows)
     } catch (e) {
+      if (e instanceof Error && e.message === '401') {
+        const ok = await refreshSession()
+        if (!ok) navigate('/login', { replace: true })
+        return
+      }
       setErr(e instanceof Error ? e.message : 'Не удалось загрузить')
     } finally {
       setLoading(false)
@@ -54,6 +63,11 @@ export default function SpacesPage() {
       setCreateOpen(false)
       await load()
     } catch (e) {
+      if (e instanceof Error && e.message === '401') {
+        const ok = await refreshSession()
+        if (!ok) navigate('/login', { replace: true })
+        return
+      }
       setErr(e instanceof Error ? e.message : 'Не удалось создать')
     } finally {
       setCreating(false)
@@ -77,20 +91,100 @@ export default function SpacesPage() {
       setJoinOk(`Вы в пространстве «${sp.name}».`)
       await load()
     } catch (e) {
+      if (e instanceof Error && e.message === '401') {
+        const ok = await refreshSession()
+        if (!ok) navigate('/login', { replace: true })
+        return
+      }
       setErr(e instanceof Error ? e.message : 'Не удалось вступить')
     } finally {
       setJoinBusy(false)
     }
   }
 
+  const helpModal =
+    helpOpen &&
+    createPortal(
+      <div className={s.modalRoot}>
+        <button type="button" className={s.modalBackdrop} aria-label="Закрыть" onClick={() => setHelpOpen(false)} />
+        <div
+          className={s.modalPanel}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={helpModalTitleId}
+          lang="ru"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <header className={s.modalHeader}>
+            <h2 id={helpModalTitleId} className={s.modalTitle}>Как работают пространства</h2>
+            <button type="button" className={s.modalClose} onClick={() => setHelpOpen(false)} aria-label="Закрыть">×</button>
+          </header>
+          <div className={s.helpBody}>
+            <ul className={s.helpSteps}>
+              <li className={s.helpStep}>
+                <span className={s.helpStepMark} aria-hidden><i className="fa-solid fa-plus" /></span>
+                <div>
+                  <p className={s.helpStepTitle}>Создайте пространство</p>
+                  <p className={s.helpStepText}>Нажмите «Добавить», укажите название и тип (работа, личное или другое). Пространство — отдельная комната для совместных задач, не связанная с вашим личным календарём.</p>
+                </div>
+              </li>
+              <li className={s.helpStep}>
+                <span className={s.helpStepMark} aria-hidden><i className="fa-solid fa-link" /></span>
+                <div>
+                  <p className={s.helpStepTitle}>Пригласите участников</p>
+                  <p className={s.helpStepText}>Внутри пространства скопируйте ссылку-приглашение и отправьте её нужному человеку. Вступить можно и по одному токену без полной ссылки.</p>
+                </div>
+              </li>
+              <li className={s.helpStep}>
+                <span className={s.helpStepMark} aria-hidden><i className="fa-solid fa-lightbulb" /></span>
+                <div>
+                  <p className={s.helpStepTitle}>Предлагайте задачи</p>
+                  <p className={s.helpStepText}>Участники создают предложения задач с заголовком, описанием и датами. Все участники видят список предложений и могут реагировать на них.</p>
+                </div>
+              </li>
+              <li className={s.helpStep}>
+                <span className={s.helpStepMark} aria-hidden><i className="fa-solid fa-calendar-check" /></span>
+                <div>
+                  <p className={s.helpStepTitle}>Перенесите в календарь</p>
+                  <p className={s.helpStepText}>Принятое предложение можно добавить в свой Google Календарь одним нажатием — оно появится в расписании как обычное событие.</p>
+                </div>
+              </li>
+              <li className={s.helpStep}>
+                <span className={s.helpStepMark} aria-hidden><i className="fa-solid fa-crown" /></span>
+                <div>
+                  <p className={s.helpStepTitle}>Роли участников</p>
+                  <p className={s.helpStepText}><strong>Coordinator</strong> управляет пространством и участниками. <strong>Member</strong> создаёт и видит предложения задач. Роль назначается при вступлении.</p>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    )
+
   return (
+    <>
+      {helpModal}
     <div className={a.page}>
       <div className={a.shell}>
         <header className={a.hero}>
           <p className={a.eyebrow}>Пространства</p>
-          <h1 className={a.h1}>
-            Совместные <span className={a.accent}>задачи</span>
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem' }}>
+            <h1 className={a.h1}>
+              Совместные <span className={a.accent}>задачи</span>
+            </h1>
+            <button
+              type="button"
+              className={s.helpBtn}
+              aria-label="Как работают пространства"
+              title="Подсказка"
+              onClick={() => setHelpOpen(true)}
+              style={{ marginTop: '0.25rem' }}
+            >
+              <i className="fa-regular fa-circle-question" aria-hidden />
+            </button>
+          </div>
           <p className={a.lead}>
             Общий список задач с близкими или коллегами: накидываете идеи и согласуете их здесь. В календарь ничего не попадает, пока вы сами не перенесёте.
           </p>
@@ -227,5 +321,6 @@ export default function SpacesPage() {
         </section>
       </div>
     </div>
+    </>
   )
 }

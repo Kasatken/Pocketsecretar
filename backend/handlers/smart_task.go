@@ -218,7 +218,9 @@ const smartTaskSystem = `Ты — планировщик задач в прил�
     "reasoning": "Высокоэнергетическая задача поставлена в утреннее окно до первого занятого слота.",
     "kind": "task"
   }
-]`
+]
+
+Финальная проверка перед отправкой ответа: первый символ — «[», последний — «]». Никакого текста, объяснений или markdown до или после массива.`
 
 const smartTaskJSONRepairSystem = `Ты технический редактор черновика ответа планировщика календаря. Пользователь этого шага не видит.
 
@@ -390,12 +392,9 @@ func busySlotEntryForPlanner(m map[string]interface{}, loc *time.Location) (dayI
 		return "", "", false
 	}
 	if ad {
-		t0, err := time.Parse(time.RFC3339, st)
-		if err != nil {
-			return "", "", false
-		}
-		inLoc := t0.In(loc)
-		return inLoc.Format("2006-01-02"), "00:00-23:59 " + summary, true
+		// Всесуточные события (дни рождения, праздники) не блокируют рабочий день —
+		// пропускаем, чтобы ИИ не считал весь день занятым.
+		return "", "", false
 	}
 	en, _ := m["end"].(string)
 	tStart, err := time.Parse(time.RFC3339, st)
@@ -479,6 +478,9 @@ func capSmartTasksRespectingQuota(tasks []aiTaskRaw, maxNonBreak int) ([]aiTaskR
 	if maxNonBreak < 0 {
 		return tasks, false
 	}
+	if maxNonBreak == 0 {
+		return nil, smartTaskNonBreakCount(tasks) > 0
+	}
 	var breaks []aiTaskRaw
 	var core []aiTaskRaw
 	for _, t := range tasks {
@@ -533,6 +535,25 @@ func normalizeTask(one aiTaskRaw, userText, todayStr string, idx int) aiTaskRaw 
 		t.Time = "09:00"
 	}
 	t.Time = normalizeHM(t.Time)
+	// Если задача приходится на сегодня, а время уже прошло — сдвигаем на сейчас+15 мин.
+	if t.Date == todayStr {
+		nowMoscow := time.Now().In(func() *time.Location {
+			l, err := time.LoadLocation("Europe/Moscow")
+			if err != nil {
+				return time.UTC
+			}
+			return l
+		}())
+		nowMin := nowMoscow.Hour()*60 + nowMoscow.Minute()
+		th, tm := parseHM(t.Time)
+		if th*60+tm <= nowMin {
+			bump := nowMin + 15
+			if bump >= 24*60 {
+				bump = 23*60 + 45
+			}
+			t.Time = fmt.Sprintf("%02d:%02d", bump/60, bump%60)
+		}
+	}
 	if hmRe.MatchString(strings.TrimSpace(t.EndTime)) {
 		t.EndTime = normalizeHM(t.EndTime)
 		sh, sm := parseHM(t.Time)

@@ -480,8 +480,6 @@ export default function AppPage() {
               </section>
             ) : null}
 
-            <div className={s.kineticRule} aria-hidden />
-
             <div className={s.leftMidRow}>
               <div className={s.leftTimerProgressCol}>
                 <section className={`${s.card} ${s.timerCard}`}>
@@ -722,7 +720,12 @@ export default function AppPage() {
                             }
                             onClick={() => void handleCompleteTask(ev)}
                           >
-                            {ev.completed ? <Check size={17} strokeWidth={2.5} aria-hidden /> : null}
+                            <Check
+                              size={17}
+                              strokeWidth={2.5}
+                              aria-hidden
+                              className={ev.completed ? s.checkDone : s.checkHover}
+                            />
                           </button>
                           <div className={s.taskMain}>
                             <div className={s.taskTitleRow}>
@@ -776,9 +779,6 @@ export default function AppPage() {
                 <div className={s.cardFooter}>
                   <Link className={s.textLink} to="/calendar">
                     Открыть календарь
-                  </Link>
-                  <Link className={s.textLink} to="/calendar">
-                    Умные задачи (AI)
                   </Link>
                 </div>
               ) : null}
