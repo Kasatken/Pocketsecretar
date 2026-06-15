@@ -120,9 +120,7 @@ export type BacklogIdeasPanelProps = {
   onModalLockChange?: (locked: boolean) => void
   refreshSession: () => Promise<boolean>
   navigateLogin: () => void
-  /** Тариф Pro — без дневного лимита умных задач. */
-  isPro?: boolean
-  /** Квота из /api/auth/me; для Free показываем лимит и время сброса. */
+  /** Квота из /api/auth/me; лимит зависит от тарифа и приходит с бэкенда. */
   smartTasksToday?: User['smart_tasks_today'] | null
 }
 
@@ -134,7 +132,6 @@ export function BacklogIdeasPanel({
   onModalLockChange,
   refreshSession,
   navigateLogin,
-  isPro = false,
   smartTasksToday = null,
 }: BacklogIdeasPanelProps) {
   const [ideas, setIdeas] = useState<BacklogIdea[]>([])
@@ -536,7 +533,6 @@ export function BacklogIdeasPanel({
                 key={idea.id}
                 idea={idea}
                 draggable={linked}
-                isPro={isPro}
                 smartTasksToday={smartTasksToday}
                 onDelete={() => handleDelete(idea.id)}
                 onSchedule={(date, opts) => handleSchedule(idea, date, opts)}
@@ -552,14 +548,12 @@ export function BacklogIdeasPanel({
 function StickerCard({
   idea,
   draggable,
-  isPro,
   smartTasksToday,
   onDelete,
   onSchedule,
 }: {
   idea: BacklogIdea
   draggable: boolean
-  isPro: boolean
   smartTasksToday: User['smart_tasks_today'] | null | undefined
   onDelete: () => Promise<void>
   onSchedule: (date: string, opts?: ScheduleBacklogOptions) => Promise<void>
@@ -573,7 +567,7 @@ function StickerCard({
   const [manualScheduleOpen, setManualScheduleOpen] = useState(false)
 
   const quotaExhausted =
-    !isPro && smartTasksToday != null && smartTasksToday.used >= smartTasksToday.limit
+    smartTasksToday != null && smartTasksToday.used >= smartTasksToday.limit
 
   useEffect(() => {
     setScheduleErr(null)

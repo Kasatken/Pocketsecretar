@@ -61,6 +61,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	var creds registerPayload
 	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
 		http.Error(w, "invalid payload", http.StatusBadRequest)
@@ -103,6 +104,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	var creds credentials
 	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
 		http.Error(w, "invalid payload", http.StatusBadRequest)
@@ -204,14 +206,11 @@ func (h *AuthHandler) respondWithSession(w http.ResponseWriter, r *http.Request,
 
 func (h *AuthHandler) userJSONForResponse(ctx context.Context, userID int64, user *models.User) map[string]interface{} {
 	u := publicUserJSON(user)
-	if h.smartTasks != nil && !isProPlan(user.Plan) {
+	if h.smartTasks != nil {
 		day, _ := repository.ParseQuotaDay(repository.QuotaDayUTC())
 		used, err := h.smartTasks.CountForDay(ctx, userID, day)
 		if err == nil {
-			limit := h.cfg.FreeSmartTaskLimit
-			if limit <= 0 {
-				limit = 3
-			}
+			limit := planSmartTaskLimit(h.cfg, user.Plan)
 			u["smart_tasks_today"] = map[string]interface{}{
 				"used":      used,
 				"limit":     limit,
@@ -256,7 +255,9 @@ func (e *validationError) Error() string {
 func clientIP(r *http.Request) string {
 	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
 		parts := strings.Split(forwarded, ",")
-		return strings.TrimSpace(parts[0])
+		// Берём самый правый IP — он добавлен доверенным прокси (nginx),
+		// а не самим клиентом, который может записать в начало любое значение.
+		return strings.TrimSpace(parts[len(parts)-1])
 	}
 	return r.RemoteAddr
 }

@@ -264,12 +264,25 @@ func isProPlan(plan string) bool {
 	return strings.EqualFold(strings.TrimSpace(plan), "pro")
 }
 
-func freeSmartTasksPayload(used, limit int) map[string]interface{} {
+func smartTasksQuotaPayload(used, limit int) map[string]interface{} {
 	return map[string]interface{}{
 		"used":      used,
 		"limit":     limit,
 		"resets_at": repository.QuotaResetsAtUTC(),
 	}
+}
+
+func planSmartTaskLimit(cfg config.Config, plan string) int {
+	if isProPlan(plan) {
+		if cfg.ProSmartTaskLimit > 0 {
+			return cfg.ProSmartTaskLimit
+		}
+		return 15
+	}
+	if cfg.FreeSmartTaskLimit > 0 {
+		return cfg.FreeSmartTaskLimit
+	}
+	return 3
 }
 
 func eventIDsToIface(ids []*string) []interface{} {

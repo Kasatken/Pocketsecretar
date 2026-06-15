@@ -21,6 +21,9 @@ import (
 
 func main() {
 	cfg := config.Load()
+	if cfg.JWTAccessSecret == "dev-access-secret" || cfg.JWTRefreshSecret == "dev-refresh-secret" {
+		log.Fatal("FATAL: JWT_ACCESS_SECRET и JWT_REFRESH_SECRET установлены в небезопасные значения по умолчанию. Задайте реальные секреты в переменных окружения.")
+	}
 	db := initDB(cfg.DatabaseURL)
 	defer db.Close()
 

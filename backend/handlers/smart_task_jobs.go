@@ -171,24 +171,22 @@ func (h *SmartTaskHandler) executeSmartTaskSync(
 	tasks = capBreakTasksPerDay(tasks, 2)
 
 	dailyLimitTruncated := false
-	if !isProPlan(plan) {
-		remaining := limit - initialCount
-		if remaining <= 0 {
-			return nil, http.StatusForbidden, map[string]interface{}{
-				"error":              "daily_limit",
-				"detail":             "Лимит исчерпан",
-				"smart_tasks_today": freeSmartTasksPayload(initialCount, limit),
-			}
+	remaining := limit - initialCount
+	if remaining <= 0 {
+		return nil, http.StatusForbidden, map[string]interface{}{
+			"error":             "daily_limit",
+			"detail":            "Лимит исчерпан",
+			"smart_tasks_today": smartTasksQuotaPayload(initialCount, limit),
 		}
-		if smartTaskNonBreakCount(tasks) > remaining {
-			var trunc bool
-			tasks, trunc = capSmartTasksRespectingQuota(tasks, remaining)
-			dailyLimitTruncated = trunc
-		}
+	}
+	if smartTaskNonBreakCount(tasks) > remaining {
+		var trunc bool
+		tasks, trunc = capSmartTasksRespectingQuota(tasks, remaining)
+		dailyLimitTruncated = trunc
 	}
 
 	dbCtx := context.Background()
-	if !isProPlan(plan) && len(tasks) > 0 {
+	if len(tasks) > 0 {
 		delta := smartTaskNonBreakCount(tasks)
 		_, ok, err := h.quota.TryIncrementCapped(dbCtx, userID, quotaDay, delta, limit)
 		if err != nil {
@@ -198,9 +196,9 @@ func (h *SmartTaskHandler) executeSmartTaskSync(
 		if !ok {
 			c, _ := h.quota.CountForDay(dbCtx, userID, quotaDay)
 			return nil, http.StatusForbidden, map[string]interface{}{
-				"error":              "daily_limit",
-				"detail":             "Лимит исчерпан",
-				"smart_tasks_today": freeSmartTasksPayload(c, limit),
+				"error":             "daily_limit",
+				"detail":            "Лимит исчерпан",
+				"smart_tasks_today": smartTasksQuotaPayload(c, limit),
 			}
 		}
 	}
@@ -241,10 +239,8 @@ func (h *SmartTaskHandler) executeSmartTaskSync(
 	if calendarFailed > 0 {
 		out["google_calendar_warning"] = fmt.Sprintf("Не удалось добавить %d из %d событий в Google Календарь", calendarFailed, len(tasks))
 	}
-	if !isProPlan(plan) {
-		used, _ := h.quota.CountForDay(dbCtx, userID, quotaDay)
-		out["smart_tasks_today"] = freeSmartTasksPayload(used, limit)
-	}
+	used, _ := h.quota.CountForDay(dbCtx, userID, quotaDay)
+	out["smart_tasks_today"] = smartTasksQuotaPayload(used, limit)
 	return out, 0, nil
 }
 
@@ -328,28 +324,26 @@ func (h *SmartTaskHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		todayStr = time.Now().Format("2006-01-02")
 	}
 
-	limit := h.cfg.FreeSmartTaskLimit
-	if limit <= 0 {
-		limit = 3
-	}
+	limit := planSmartTaskLimit(h.cfg, user.Plan)
 
 	quotaDay, _ := repository.ParseQuotaDay(repository.QuotaDayUTC())
-	var initialCount int
-	if !isProPlan(user.Plan) {
-		initialCount, err = h.quota.CountForDay(r.Context(), userID, quotaDay)
-		if err != nil {
-			log.Printf("smart-task quota read: %v", err)
-			http.Error(w, "quota error", http.StatusInternalServerError)
-			return
+	initialCount, err := h.quota.CountForDay(r.Context(), userID, quotaDay)
+	if err != nil {
+		log.Printf("smart-task quota read: %v", err)
+		http.Error(w, "quota error", http.StatusInternalServerError)
+		return
+	}
+	if initialCount >= limit {
+		detail := "Достигнут дневной лимит умных задач на тарифе Free."
+		if isProPlan(user.Plan) {
+			detail = fmt.Sprintf("Достигнут дневной лимит умных задач на тарифе Pro (%d/день).", limit)
 		}
-		if initialCount >= limit {
-			writeJSON(w, http.StatusForbidden, map[string]interface{}{
-				"error":              "daily_limit",
-				"detail":             "Достигнут дневной лимит умных задач на тарифе Free.",
-				"smart_tasks_today": freeSmartTasksPayload(initialCount, limit),
-			})
-			return
-		}
+		writeJSON(w, http.StatusForbidden, map[string]interface{}{
+			"error":             "daily_limit",
+			"detail":            detail,
+			"smart_tasks_today": smartTasksQuotaPayload(initialCount, limit),
+		})
+		return
 	}
 
 	refresh, err := h.google.RefreshTokenByUserID(r.Context(), userID)

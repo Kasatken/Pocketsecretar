@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -37,16 +38,85 @@ const dailyAdviceSystem = `Ты — лаконичный и внимательн
 - Не давай медицинских, юридических или финансовых инструкций; избегай категоричных обещаний и слов «всегда», «никогда», «обязательно».
 - Если календарь пуст — мягко предложи структурировать день (фокус, перерывы, глубокая работа) без давления и наставлений.`
 
+// adviceRefreshBucket хранит временны́е метки запросов за скользящее окно 1 час.
+type adviceRefreshBucket struct {
+	timestamps []time.Time
+}
+
 // DailyAdviceHandler — GET /api/calendar/daily-advice
 type DailyAdviceHandler struct {
 	cfg    config.Config
 	google *repository.GoogleCalendarRepository
 	users  *repository.UserRepository
 	cache  *repository.DailyAdviceRepository
+
+	refreshMu  sync.Mutex
+	refreshMap map[int64]adviceRefreshBucket
 }
 
 func NewDailyAdviceHandler(cfg config.Config, google *repository.GoogleCalendarRepository, users *repository.UserRepository, cache *repository.DailyAdviceRepository) *DailyAdviceHandler {
-	return &DailyAdviceHandler{cfg: cfg, google: google, users: users, cache: cache}
+	h := &DailyAdviceHandler{
+		cfg:        cfg,
+		google:     google,
+		users:      users,
+		cache:      cache,
+		refreshMap: make(map[int64]adviceRefreshBucket),
+	}
+	go h.cleanRefreshMap()
+	return h
+}
+
+// cleanRefreshMap раз в час удаляет записи, у которых не осталось актуальных меток в окне.
+func (h *DailyAdviceHandler) cleanRefreshMap() {
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		cutoff := time.Now().Add(-time.Hour)
+		h.refreshMu.Lock()
+		for id, b := range h.refreshMap {
+			n := 0
+			for _, t := range b.timestamps {
+				if t.After(cutoff) {
+					b.timestamps[n] = t
+					n++
+				}
+			}
+			if n == 0 {
+				delete(h.refreshMap, id)
+			} else {
+				h.refreshMap[id] = adviceRefreshBucket{timestamps: b.timestamps[:n]}
+			}
+		}
+		h.refreshMu.Unlock()
+	}
+}
+
+// allowRefresh проверяет hourly-лимит принудительных обновлений через истинное скользящее окно.
+// Возвращает false и текущий счётчик, если лимит превышен.
+func (h *DailyAdviceHandler) allowRefresh(userID int64, hourLimit int) (ok bool, used int) {
+	h.refreshMu.Lock()
+	defer h.refreshMu.Unlock()
+	now := time.Now()
+	cutoff := now.Add(-time.Hour)
+
+	b := h.refreshMap[userID]
+	// Выбрасываем метки старше часа (скользящее окно).
+	n := 0
+	for _, t := range b.timestamps {
+		if t.After(cutoff) {
+			b.timestamps[n] = t
+			n++
+		}
+	}
+	b.timestamps = b.timestamps[:n]
+
+	if len(b.timestamps) >= hourLimit {
+		h.refreshMap[userID] = b
+		return false, len(b.timestamps)
+	}
+	b.timestamps = append(b.timestamps, now)
+	h.refreshMap[userID] = b
+	return true, len(b.timestamps)
 }
 
 func (h *DailyAdviceHandler) googleConfigured() bool {
@@ -69,6 +139,33 @@ func (h *DailyAdviceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	refresh := r.URL.Query().Get("refresh") == "1" || strings.EqualFold(r.URL.Query().Get("refresh"), "true")
+
+	if refresh {
+		plan := ""
+		if h.users != nil {
+			if u, e := h.users.FindByID(r.Context(), userID); e == nil && u != nil {
+				plan = u.Plan
+			}
+		}
+		hourLimit := h.cfg.FreeAdviceRefreshPerHour
+		if hourLimit <= 0 {
+			hourLimit = 5
+		}
+		if isProPlan(plan) {
+			hourLimit = h.cfg.ProAdviceRefreshPerHour
+			if hourLimit <= 0 {
+				hourLimit = 20
+			}
+		}
+		if ok, used := h.allowRefresh(userID, hourLimit); !ok {
+			writeJSON(w, http.StatusTooManyRequests, map[string]interface{}{
+				"detail":     fmt.Sprintf("Слишком много обновлений: %d/%d в час. Подождите до следующего часа.", used, hourLimit),
+				"used":       used,
+				"hour_limit": hourLimit,
+			})
+			return
+		}
+	}
 
 	if !h.googleConfigured() {
 		writeJSON(w, http.StatusOK, map[string]interface{}{

@@ -73,6 +73,13 @@ export default function SpacePage() {
   const myId = user?.id
   const spaceId = id ? parseInt(id, 10) : NaN
   const proposalsSectionRef = useRef<HTMLElement | null>(null)
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current !== null) clearTimeout(copiedTimerRef.current)
+    }
+  }, [])
 
   const [space, setSpace] = useState<Space | null>(null)
   const [members, setMembers] = useState<SpaceMember[]>([])
@@ -88,6 +95,8 @@ export default function SpacePage() {
   const [inviteToken, setInviteToken] = useState<string | null>(null)
   const [inviteBusy, setInviteBusy] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteAdvanced, setInviteAdvanced] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const [assigneeId, setAssigneeId] = useState<number>(0)
   const [pTitle, setPTitle] = useState('')
@@ -139,6 +148,8 @@ export default function SpacePage() {
 
   useEffect(() => {
     setInviteOpen(false)
+    setInviteAdvanced(false)
+    setCopied(false)
     setProposeOpen(false)
     setInviteToken(null)
     setAssigneeId(0)
@@ -170,6 +181,36 @@ export default function SpacePage() {
     return () => window.clearTimeout(tid)
   }, [location.hash, loading, spaceId, proposals.length])
 
+  const copyInviteLink = (token: string) => {
+    const link = `${window.location.origin}/spaces?token=${encodeURIComponent(token)}`
+    void navigator.clipboard.writeText(link).then(() => {
+      setCopied(true)
+      if (copiedTimerRef.current !== null) clearTimeout(copiedTimerRef.current)
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2500)
+    })
+  }
+
+  const onQuickInvite = async () => {
+    if (!accessToken || !space) return
+    setInviteBusy(true)
+    setErr(null)
+    setInviteToken(null)
+    try {
+      const out = await createSpaceInvite(accessToken, space.id, {
+        role: 'member',
+        share_access: 'partial',
+        expires_days: 7,
+      })
+      setInviteToken(out.token)
+      copyInviteLink(out.token)
+      setFlash('Ссылка скопирована — отправьте её участнику. Она действует 7 дней и сгорает после входа.')
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Не удалось создать приглашение')
+    } finally {
+      setInviteBusy(false)
+    }
+  }
+
   const onInvite = async (e: FormEvent) => {
     e.preventDefault()
     if (!accessToken || !space) return
@@ -184,8 +225,10 @@ export default function SpacePage() {
         expires_days: inviteDays,
       })
       setInviteToken(out.token)
-      setFlash('Токен готов — отправьте его приглашённому. После входа токен сгорает.')
+      copyInviteLink(out.token)
+      setFlash('Ссылка скопирована — отправьте её участнику. После входа ссылка сгорает.')
       setInviteOpen(false)
+      setInviteAdvanced(false)
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Не удалось создать приглашение')
     } finally {
@@ -338,29 +381,43 @@ export default function SpacePage() {
                     </div>
                     {!inviteOpen && (
                       <p className={s.collapsibleHint}>
-                        Выдайте токен или ссылку с ним — участник вставит её на странице «Пространства».
+                        Сгенерируйте ссылку и отправьте её участнику — он откроет её и сразу войдёт в пространство.
                       </p>
                     )}
                   </div>
                   <div className={s.btnToolbar}>
+                    {!inviteOpen && (
+                      <button
+                        type="button"
+                        className={a.addBtn}
+                        disabled={inviteBusy}
+                        onClick={() => void onQuickInvite()}
+                      >
+                        {inviteBusy ? 'Создаём…' : 'Скопировать ссылку'}
+                      </button>
+                    )}
                     <button
                       type="button"
-                      className={inviteOpen ? s.btnSmall : a.addBtn}
-                      onClick={() => setInviteOpen((o) => !o)}
+                      className={s.btnSmall}
+                      onClick={() => {
+                        setInviteOpen((o) => !o)
+                        setInviteAdvanced(false)
+                      }}
                     >
-                      {inviteOpen ? 'Свернуть' : 'Пригласить'}
+                      {inviteOpen ? 'Свернуть' : 'Настроить'}
                     </button>
                   </div>
                 </div>
+
                 {inviteOpen && (
                   <div className={s.collapsibleBody}>
                     <p className={s.fieldHint}>
-                      Email по желанию: если указан, токен сработает только для этого адреса.
+                      Email по желанию — ссылка сработает только для этого адреса.
                     </p>
                     <form onSubmit={onInvite}>
                       <div className={s.field}>
                         <label className={s.fieldLabel} htmlFor="inv-email">
-                          Email
+                          Email (необязательно)
                         </label>
                         <input
                           id="inv-email"
@@ -369,65 +426,92 @@ export default function SpacePage() {
                           value={inviteEmail}
                           onChange={(e) => setInviteEmail(e.target.value)}
                           autoComplete="off"
+                          placeholder="user@example.com"
                         />
                       </div>
-                      <div className={s.field}>
-                        <label className={s.fieldLabel} htmlFor="inv-role">
-                          Роль
-                        </label>
-                        <select
-                          id="inv-role"
-                          className={s.fieldSelect}
-                          value={inviteRole}
-                          onChange={(e) => setInviteRole(e.target.value)}
-                        >
-                          <option value="member">Участник</option>
-                          <option value="observer">Наблюдатель</option>
-                          <option value="coordinator">Координатор</option>
-                        </select>
-                      </div>
-                      <div className={s.field}>
-                        <label className={s.fieldLabel} htmlFor="inv-share">
-                          Доступ
-                        </label>
-                        <select
-                          id="inv-share"
-                          className={s.fieldSelect}
-                          value={inviteShare}
-                          onChange={(e) => setInviteShare(e.target.value)}
-                        >
-                          <option value="partial">Частичный</option>
-                          <option value="full">Полный</option>
-                          <option value="view_only">Только просмотр</option>
-                        </select>
-                      </div>
-                      <div className={s.field}>
-                        <label className={s.fieldLabel} htmlFor="inv-days">
-                          Срок (дней)
-                        </label>
-                        <input
-                          id="inv-days"
-                          type="number"
-                          className={s.fieldInput}
-                          min={1}
-                          max={30}
-                          value={inviteDays}
-                          onChange={(e) => setInviteDays(parseInt(e.target.value, 10) || 7)}
-                        />
-                      </div>
+
+                      <button
+                        type="button"
+                        className={s.btnSmall}
+                        style={{ marginBottom: 'var(--s3)' }}
+                        onClick={() => setInviteAdvanced((o) => !o)}
+                      >
+                        {inviteAdvanced ? '▲ Скрыть роль и срок' : '▼ Роль и срок'}
+                      </button>
+
+                      {inviteAdvanced && (
+                        <>
+                          <div className={s.field}>
+                            <label className={s.fieldLabel} htmlFor="inv-role">
+                              Роль
+                            </label>
+                            <select
+                              id="inv-role"
+                              className={s.fieldSelect}
+                              value={inviteRole}
+                              onChange={(e) => setInviteRole(e.target.value)}
+                            >
+                              <option value="member">Участник</option>
+                              <option value="observer">Наблюдатель</option>
+                              <option value="coordinator">Координатор</option>
+                            </select>
+                          </div>
+                          <div className={s.field}>
+                            <label className={s.fieldLabel} htmlFor="inv-share">
+                              Доступ
+                            </label>
+                            <select
+                              id="inv-share"
+                              className={s.fieldSelect}
+                              value={inviteShare}
+                              onChange={(e) => setInviteShare(e.target.value)}
+                            >
+                              <option value="partial">Частичный</option>
+                              <option value="full">Полный</option>
+                              <option value="view_only">Только просмотр</option>
+                            </select>
+                          </div>
+                          <div className={s.field}>
+                            <label className={s.fieldLabel} htmlFor="inv-days">
+                              Срок (дней, макс. 30)
+                            </label>
+                            <input
+                              id="inv-days"
+                              type="number"
+                              className={s.fieldInput}
+                              min={1}
+                              max={30}
+                              value={inviteDays}
+                              onChange={(e) => setInviteDays(parseInt(e.target.value, 10) || 7)}
+                            />
+                          </div>
+                        </>
+                      )}
+
                       <button type="submit" className={a.addBtn} disabled={inviteBusy}>
-                        {inviteBusy ? 'Создаём…' : 'Выдать токен'}
+                        {inviteBusy ? 'Создаём…' : 'Сгенерировать и скопировать'}
                       </button>
                     </form>
                   </div>
                 )}
+
                 {inviteToken && (
                   <div className={s.tokenBox} role="status">
-                    <div>{inviteToken}</div>
-                    <div className={s.shareLinkLine}>
-                      Ссылка для вставки:{' '}
-                      {`${typeof window !== 'undefined' ? window.location.origin : ''}/spaces?token=${encodeURIComponent(inviteToken)}`}
+                    <div className={s.shareLinkRow}>
+                      <span className={s.shareLink}>
+                        {`${window.location.origin}/spaces?token=${encodeURIComponent(inviteToken)}`}
+                      </span>
+                      <button
+                        type="button"
+                        className={copied ? s.btnCopied : s.btnSmall}
+                        onClick={() => copyInviteLink(inviteToken)}
+                      >
+                        {copied ? '✓ Скопировано' : 'Копировать'}
+                      </button>
                     </div>
+                    <p className={s.tokenHint}>
+                      Ссылка одноразовая — сгорит после первого входа.
+                    </p>
                   </div>
                 )}
               </section>

@@ -347,12 +347,15 @@ export default function CalendarPage() {
     return Array.from({ length: 7 }, (_, i) => addDays(start, i))
   }, [anchor])
 
-  const isPro = (user?.plan ?? '').toLowerCase() === 'pro'
   const quota = user?.smart_tasks_today
-  const quotaExhausted = !isPro && quota != null && quota.used >= quota.limit
+  const quotaExhausted = quota != null && quota.used >= quota.limit
+  const quotaLow =
+    quota != null &&
+    quota.limit - quota.used < Math.max(2, Math.ceil(quota.limit * 0.25))
 
   const runSmartAdd = async (e: FormEvent) => {
     e.preventDefault()
+    if (smartBusy) return
     if (!accessToken) return
     const t = smartText.trim()
     if (!t) {
@@ -371,7 +374,7 @@ export default function CalendarPage() {
       const res = await postSmartTask(accessToken, t, today)
       setSmartText('')
       const n = res.tasks?.length ?? 0
-      const tail = res.daily_limit_truncated ? ' (часть не вошла в дневной лимит Free)' : ''
+      const tail = res.daily_limit_truncated ? ' (часть не вошла в дневной лимит)' : ''
       setSmartOk(
         n > 0 ? `Добавлено в календарь: ${n} ${pluralEvents(n)}${tail}` : 'Готово',
       )
@@ -704,7 +707,7 @@ export default function CalendarPage() {
                             deletingEventId === ev.id ? 'Удаление…' : 'Удалить из Google Календаря'
                           }
                           title="Удалить"
-                          onClick={() => handleDeleteCalendarEvent(ev)}
+                          onClick={() => void handleDeleteCalendarEvent(ev)}
                         >
                           {deletingEventId === ev.id ? (
                             <Loader2 className={s.modalActionIconSpin} size={16} strokeWidth={2.25} aria-hidden />
@@ -790,12 +793,17 @@ export default function CalendarPage() {
                 </span>
               </div>
             )}
-            {quota && !isPro && (
+            {quotaLow && quota && (
               <p className={s.smartModalQuotaLine}>
-                Запросов сегодня:{' '}
+                Осталось запросов:{' '}
                 <strong>
-                  {quota.used} / {quota.limit}
+                  {quota.limit - quota.used} / {quota.limit}
                 </strong>
+                {quota.resets_at && (
+                  <span className={s.smartModalQuotaReset}>
+                    {' · '}{formatQuotaResetsAtHint(quota.resets_at)}
+                  </span>
+                )}
               </p>
             )}
 
@@ -1345,7 +1353,6 @@ export default function CalendarPage() {
             onModalLockChange={setBacklogModalLock}
             refreshSession={refreshSession}
             navigateLogin={navigateToLogin}
-            isPro={isPro}
             smartTasksToday={quota ?? null}
           />
         </aside>

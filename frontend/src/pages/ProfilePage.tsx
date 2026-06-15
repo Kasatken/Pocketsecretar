@@ -63,8 +63,10 @@ export default function ProfilePage() {
   const [stats, setStats] = useState<UserStats | null>(null)
 
   const quota = user?.smart_tasks_today
-  const quotaExhausted =
-    user != null && user.plan !== 'pro' && quota != null && quota.used >= quota.limit
+  const quotaExhausted = quota != null && quota.used >= quota.limit
+  const quotaLow =
+    quota != null &&
+    quota.limit - quota.used < Math.max(2, Math.ceil(quota.limit * 0.25))
 
   useEffect(() => {
     if (!user) return
@@ -229,7 +231,11 @@ export default function ProfilePage() {
   }
 
   const handleLogout = async () => {
-    await logout()
+    try {
+      await logout()
+    } catch {
+      // Очищаем сессию на клиенте даже если запрос упал (офлайн, таймаут).
+    }
     navigate('/', { replace: true })
   }
 
@@ -674,14 +680,19 @@ export default function ProfilePage() {
             {user?.plan === 'pro' ? (
               <p className={s.promoProBadge}>
                 <i className="fa-solid fa-circle-check" aria-hidden />
-                У вас тариф Pro — без дневного лимита умных задач в календаре.
+                У вас тариф Pro — 30 умных задач в день.
+                {quotaLow && quota ? ` Осталось: ${quota.limit - quota.used}.` : ''}
               </p>
             ) : (
               <>
                 <p className={s.promoLead}>
-                  По умолчанию доступен тариф Free (лимит умных задач в день). Введите промокод, чтобы
-                  получить Pro.
+                  По умолчанию доступен тариф Free (3 умных задачи в день). Введите промокод, чтобы получить Pro (30/день).
                 </p>
+                {quotaLow && quota && !quotaExhausted ? (
+                  <p className={s.promoQuotaExhausted} role="status">
+                    Осталось запросов сегодня: {quota.limit - quota.used} из {quota.limit}.
+                  </p>
+                ) : null}
                 {quotaExhausted && quota?.resets_at ? (
                   <p className={s.promoQuotaExhausted} role="status">
                     {formatQuotaResetsAtHint(quota.resets_at)}

@@ -31,6 +31,11 @@ type Config struct {
 	SmartTaskMaxTokens    int
 	AdviceMaxTokens       int
 	FreeSmartTaskLimit int
+	ProSmartTaskLimit  int
+	// FreeAdviceRefreshPerHour — максимум принудительных refresh советника в час для Free-пользователей.
+	FreeAdviceRefreshPerHour int
+	// ProAdviceRefreshPerHour — то же для Pro.
+	ProAdviceRefreshPerHour int
 	// ProPromoCode — секретная строка; при совпадении POST /api/auth/me/promo выставляет пользователю plan=pro.
 	ProPromoCode string
 
@@ -64,7 +69,10 @@ func Load() Config {
 		OpenRouterProxy:            os.Getenv("OPENROUTER_PROXY"),
 		SmartTaskMaxTokens:    getEnvInt("SMART_TASK_MAX_TOKENS", 2048),
 		AdviceMaxTokens:       getEnvInt("ADVICE_MAX_TOKENS", 1100),
-		FreeSmartTaskLimit: getEnvInt("FREE_SMART_TASK_LIMIT", 3),
+		FreeSmartTaskLimit:       getEnvInt("FREE_SMART_TASK_LIMIT", 3),
+		ProSmartTaskLimit:        getEnvInt("PRO_SMART_TASK_LIMIT", 15),
+		FreeAdviceRefreshPerHour: getEnvInt("FREE_ADVICE_REFRESH_PER_HOUR", 5),
+		ProAdviceRefreshPerHour:  getEnvInt("PRO_ADVICE_REFRESH_PER_HOUR", 20),
 		ProPromoCode:       strings.TrimSpace(os.Getenv("PRO_PROMO_CODE")),
 
 		UploadDir:          getEnv("UPLOAD_DIR", "./uploads"),

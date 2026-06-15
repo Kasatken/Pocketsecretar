@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom'
-import { useEffect, useId, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { extractInviteToken } from '../lib/inviteLink'
 import { createSpace, fetchSpaces, joinSpaceWithToken, type Space } from '../lib/spacesApi'
@@ -16,6 +16,8 @@ function typeLabel(t: string) {
 export default function SpacesPage() {
   const { accessToken, refreshSession } = useAuth()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const didAutoJoin = useRef(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const helpModalTitleId = useId()
   const [spaces, setSpaces] = useState<Space[]>([])
@@ -51,6 +53,38 @@ export default function SpacesPage() {
   useEffect(() => {
     void load()
   }, [accessToken])
+
+  // Авто-вступление если в URL есть ?token=...
+  useEffect(() => {
+    if (didAutoJoin.current || !accessToken) return
+    const urlToken = searchParams.get('token')
+    if (!urlToken) return
+    didAutoJoin.current = true
+    setSearchParams({}, { replace: true })
+    const token = extractInviteToken(urlToken)
+    if (!token.trim()) {
+      setErr('Неверный токен в ссылке')
+      return
+    }
+    setJoinBusy(true)
+    setErr(null)
+    setJoinOk(null)
+    joinSpaceWithToken(accessToken, token)
+      .then(async (sp) => {
+        setJoinOk(`Вы вступили в пространство «${sp.name}».`)
+        await load()
+      })
+      .catch((e) => {
+        if (e instanceof Error && e.message === '401') {
+          void refreshSession().then((ok) => {
+            if (!ok) navigate('/login', { replace: true })
+          })
+          return
+        }
+        setErr(e instanceof Error ? e.message : 'Не удалось вступить')
+      })
+      .finally(() => setJoinBusy(false))
+  }, [accessToken]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onCreate = async (e: FormEvent) => {
     e.preventDefault()
