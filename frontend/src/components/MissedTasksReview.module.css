@@ -62,6 +62,11 @@
 .headText {
   min-width: 0;
 }
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
 .title {
   margin: 0;
   font-size: 1.15rem;
@@ -69,8 +74,22 @@
   color: var(--royal);
   letter-spacing: -0.01em;
 }
+.count {
+  flex: none;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.4rem;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--card);
+  background: var(--royal);
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
 .subtitle {
-  margin: 0.2rem 0 0;
+  margin: 0.25rem 0 0;
   font-size: 0.86rem;
   color: var(--muted);
 }
@@ -111,6 +130,7 @@
   justify-content: space-between;
   gap: var(--s2) var(--s3);
   flex-wrap: wrap;
+  min-height: 3.1rem;
   padding: var(--s2) var(--s3);
   border: 2px solid var(--text);
   border-radius: 9px;
@@ -118,7 +138,7 @@
   box-shadow: 2px 2px 0 0 var(--gold-line);
 }
 .row[data-busy] {
-  opacity: 0.5;
+  opacity: 0.55;
 }
 .rowText {
   display: flex;
@@ -143,20 +163,24 @@
 .actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--s1);
   flex: none;
 }
 .btn {
-  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.82rem;
   font-weight: 700;
-  padding: 0.34rem 0.66rem;
+  padding: 0.36rem 0.7rem;
   border-radius: 7px;
   border: 1.5px solid var(--border);
   background: var(--card);
-  color: var(--muted);
+  color: var(--text);
   cursor: pointer;
   white-space: nowrap;
-  transition: transform 0.08s ease, background 0.12s ease, color 0.12s ease;
+  transition: transform 0.08s ease, background 0.12s ease, filter 0.12s ease;
 }
 .btn:hover:not(:disabled) {
   transform: translate(-1px, -1px);
@@ -164,24 +188,60 @@
 .btn:active:not(:disabled) {
   transform: none;
 }
-.btn:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
 .btn:focus-visible {
   outline: 2px solid var(--royal);
   outline-offset: 2px;
 }
+/* Основное позитивное действие — заметная зелёная кнопка. */
 .btnDone {
+  background: var(--accent);
   border-color: var(--accent);
-  color: var(--accent);
+  color: #fff;
 }
 .btnDone:hover:not(:disabled) {
-  background: var(--gbg);
+  filter: brightness(1.06);
 }
 .btnMove {
   border-color: var(--royal);
   color: var(--royal);
+}
+.btnMove:hover:not(:disabled) {
+  background: rgba(26, 39, 68, 0.06);
+}
+
+/* Тихое разрушающее действие — иконка-корзина, как в карточках задач сайта. */
+.iconBtn {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  color: var(--muted);
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.iconBtn:hover {
+  color: #a1401a;
+  border-color: #a1401a;
+}
+.iconBtn:focus-visible {
+  outline: 2px solid var(--royal);
+  outline-offset: 2px;
+}
+
+.rowSpin {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  color: var(--muted);
+}
+.spin {
+  animation: spin 0.7s linear infinite;
 }
 
 .more {
@@ -217,6 +277,38 @@
   outline-offset: 2px;
 }
 
+/* Экран завершения */
+.done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.35rem;
+  padding: var(--s3) var(--s2) var(--s2);
+}
+.doneIcon {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  color: var(--accent);
+  background: var(--gbg);
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  margin-bottom: 0.35rem;
+}
+.doneTitle {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--royal);
+}
+.doneText {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
 @keyframes fade {
   from {
     opacity: 0;
@@ -228,11 +320,19 @@
     transform: translateY(6px);
   }
 }
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .backdrop,
   .panel {
     animation: none;
+  }
+  .spin {
+    animation-duration: 1.4s;
   }
 }
 
