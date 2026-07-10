@@ -323,6 +323,47 @@ export async function deleteCalendarEvent(accessToken: string, eventId: string):
   }
 }
 
+export async function rescheduleCalendarEvent(
+  accessToken: string,
+  eventId: string,
+  start: Date,
+  end: Date,
+): Promise<void> {
+  const res = await fetch(`/api/calendar/events/${encodeURIComponent(eventId)}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ start: start.toISOString(), end: end.toISOString() }),
+  })
+
+  if (res.status === 401) {
+    const err = new Error('401')
+    err.name = 'Unauthorized'
+    throw err
+  }
+
+  if (res.status === 404) {
+    throw new Error('Событие не найдено или уже удалено')
+  }
+
+  if (res.status === 400) {
+    const errBody = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(typeof errBody.error === 'string' ? errBody.error : 'Некорректный запрос')
+  }
+
+  if (res.status === 502 || res.status === 500) {
+    const errBody = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(typeof errBody.error === 'string' ? errBody.error : 'Не удалось перенести событие')
+  }
+
+  if (!res.ok) {
+    throw new Error('Запрос не выполнен')
+  }
+}
+
 export type CompleteCalendarEventResponse = {
   ok: boolean
   already_completed: boolean

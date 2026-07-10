@@ -73,6 +73,7 @@ func main() {
 	mux.Handle("/api/auth/google/status", middleware.RequireAuth(tokens, http.HandlerFunc(googleOAuth.Status)))
 	mux.Handle("GET /api/calendar/events", middleware.RequireAuth(tokens, http.HandlerFunc(calendarEvents.ListEvents)))
 	mux.Handle("DELETE /api/calendar/events/{id}", middleware.RequireAuth(tokens, http.HandlerFunc(calendarEvents.DeleteEvent)))
+	mux.Handle("PATCH /api/calendar/events/{id}", middleware.RequireAuth(tokens, http.HandlerFunc(calendarEvents.UpdateEvent)))
 	mux.Handle("POST /api/calendar/events/{id}/complete", middleware.RequireAuth(tokens, http.HandlerFunc(calendarEvents.CompleteEvent)))
 	mux.Handle("/api/calendar/smart-task", middleware.RequireAuth(tokens, smartTask))
 	mux.Handle("GET /api/calendar/daily-advice", middleware.RequireAuth(tokens, dailyAdvice))

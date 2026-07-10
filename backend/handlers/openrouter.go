@@ -41,6 +41,9 @@ func OpenRouterChat(ctx context.Context, cfg config.Config, apiKey, model string
 		"model":       model,
 		"temperature": temperature,
 		"max_tokens":  maxTok,
+		// Отключаем «размышление» модели (reasoning) — для reasoning-моделей вроде qwen3
+		// оно добавляет сотни скрытых токенов и 15–60 с задержки на простой JSON-ответ.
+		"reasoning": map[string]interface{}{"enabled": false},
 		"messages": []map[string]string{
 			{"role": "system", "content": system},
 			{"role": "user", "content": user},

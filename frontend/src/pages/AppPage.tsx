@@ -22,6 +22,7 @@ import { fetchAcceptedCalendarOverlays } from '../lib/spacesApi'
 import { getEffectiveSkyHour, previewSkyGradientAtHour } from '../lib/dayGaugeSkyGradient'
 import { LevelProgress } from '../components/LevelProgress'
 import { SpaceProposalCalendarBadge } from '../components/SpaceProposalCalendarBadge'
+import MissedTasksReview from '../components/MissedTasksReview'
 import s from './AppPage.module.css'
 
 function displayLabel(user: User | null) {
@@ -486,6 +487,11 @@ export default function AppPage() {
                 <span className={s.metaJournal}>{journalLine}</span>
               </div>
             </header>
+
+            <MissedTasksReview
+              accessToken={accessToken}
+              onChanged={() => setCalSyncGen((g) => g + 1)}
+            />
 
             {nextEvent ? (
               <section className={s.nextStrip} aria-live="polite">

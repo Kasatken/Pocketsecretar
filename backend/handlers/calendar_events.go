@@ -306,6 +306,119 @@ func (h *CalendarEventsHandler) CompleteEvent(w http.ResponseWriter, r *http.Req
 	})
 }
 
+type updateEventPayload struct {
+	Start string `json:"start"`
+	End   string `json:"end"`
+}
+
+// UpdateEvent PATCH /api/calendar/events/{id} — переносит событие (меняет только время начала/конца).
+func (h *CalendarEventsHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	eventID := strings.TrimSpace(r.PathValue("id"))
+	if eventID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "event id required"})
+		return
+	}
+
+	var body updateEventPayload
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+	start, err := time.Parse(time.RFC3339, strings.TrimSpace(body.Start))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid start"})
+		return
+	}
+	end, err := time.Parse(time.RFC3339, strings.TrimSpace(body.End))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid end"})
+		return
+	}
+	if !end.After(start) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "end must be after start"})
+		return
+	}
+
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if !h.googleConfigured() {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Google Calendar is not configured"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
+	defer cancel()
+
+	refresh, err := h.repo.RefreshTokenByUserID(ctx, userID)
+	if err != nil {
+		log.Printf("calendar refresh token: %v", err)
+		http.Error(w, "failed to load calendar link", http.StatusInternalServerError)
+		return
+	}
+	if refresh == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Google Calendar is not linked"})
+		return
+	}
+
+	oauthCfg := newGoogleOAuthConfig(h.cfg)
+	ts := oauthCfg.TokenSource(ctx, &oauth2.Token{RefreshToken: refresh})
+	httpClient := oauth2.NewClient(ctx, ts)
+
+	st, err := patchGoogleCalendarEventTime(ctx, httpClient, eventID, start, end, defaultBacklogEventTZ)
+	if err != nil {
+		log.Printf("google calendar patch: %v", err)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "failed to reschedule event"})
+		return
+	}
+	switch st {
+	case http.StatusOK:
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	case http.StatusNotFound, http.StatusGone:
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "event not found"})
+	default:
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "failed to reschedule event"})
+	}
+}
+
+// patchGoogleCalendarEventTime меняет только start/end события (wall clock в timeZone), остальные поля Google не трогает.
+func patchGoogleCalendarEventTime(ctx context.Context, httpClient *http.Client, eventID string, start, end time.Time, timeZone string) (int, error) {
+	loc, err := time.LoadLocation(timeZone)
+	if err != nil {
+		loc = time.UTC
+	}
+	s := start.In(loc)
+	e := end.In(loc)
+	patch := map[string]interface{}{
+		"start": map[string]string{"dateTime": s.Format("2006-01-02T15:04:05"), "timeZone": timeZone},
+		"end":   map[string]string{"dateTime": e.Format("2006-01-02T15:04:05"), "timeZone": timeZone},
+	}
+	raw, err := json.Marshal(patch)
+	if err != nil {
+		return 0, err
+	}
+	u := "https://www.googleapis.com/calendar/v3/calendars/primary/events/" + url.PathEscape(eventID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, u, bytes.NewReader(raw))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode, nil
+}
+
 func getGoogleCalendarEvent(ctx context.Context, httpClient *http.Client, eventID string) (int, error) {
 	u := "https://www.googleapis.com/calendar/v3/calendars/primary/events/" + url.PathEscape(eventID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)

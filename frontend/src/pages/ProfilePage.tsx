@@ -279,16 +279,6 @@ export default function ProfilePage() {
     <div className={s.page}>
       <h1 className={s.visuallyHidden}>Настройки</h1>
 
-      <header className={s.pageIntro}>
-        <span className={s.introBadge}>
-          <span className={s.introPulse} aria-hidden />
-          Старт
-        </span>
-        <p className={s.pageLead}>
-          Имя и фото — чтобы вас узнавали. Календарь — чтобы день подтягивал встречи без ручного ввода.
-        </p>
-      </header>
-
       {flash ? (
         <div className={flash.type === 'ok' ? s.flashOk : s.flashErr} role="status">
           <span className={s.flashIcon} aria-hidden>
