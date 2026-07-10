@@ -9,6 +9,7 @@
   --border: #e5e2de;
   --gold-line: rgba(201, 162, 39, 0.42);
   --royal: #1a2744;
+  --card-shadow: rgba(26, 39, 68, 0.18);
   --s1: 0.382rem;
   --s2: 0.618rem;
   --s3: 1rem;
@@ -108,7 +109,7 @@
   border-radius: 10px;
   overflow: hidden;
   background: var(--card);
-  box-shadow: 3px 3px 0 0 var(--text), inset 0 0 0 1px var(--gold-line);
+  box-shadow: 3px 3px 0 0 var(--card-shadow);
 }
 
 .segLink {

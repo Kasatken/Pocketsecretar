@@ -42,14 +42,14 @@
 .panel::before {
   top: 9px;
   left: 9px;
-  border-top: 2px solid var(--gold-line);
-  border-left: 2px solid var(--gold-line);
+  border-top: 2px solid var(--card-shadow);
+  border-left: 2px solid var(--card-shadow);
 }
 .panel::after {
   bottom: 9px;
   right: 9px;
-  border-bottom: 2px solid var(--gold-line);
-  border-right: 2px solid var(--gold-line);
+  border-bottom: 2px solid var(--card-shadow);
+  border-right: 2px solid var(--card-shadow);
 }
 
 .head {
@@ -135,7 +135,7 @@
   border: 2px solid var(--text);
   border-radius: 9px;
   background: var(--card);
-  box-shadow: 2px 2px 0 0 var(--gold-line);
+  box-shadow: 2px 2px 0 0 var(--card-shadow);
 }
 .row[data-busy] {
   opacity: 0.55;

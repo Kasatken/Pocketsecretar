@@ -40,7 +40,7 @@
   background: var(--card);
   border: 2px solid var(--text);
   border-radius: 10px;
-  box-shadow: 4px 4px 0 0 var(--text), inset 0 0 0 1px var(--gold-line);
+  box-shadow: 4px 4px 0 0 var(--card-shadow);
   overflow: hidden;
 }
 

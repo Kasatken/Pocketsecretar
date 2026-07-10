@@ -639,7 +639,13 @@ export default function ProfilePage() {
               </div>
               <div className={s.statCell}>
                 <span className={`${s.statValue} ${stats.streak > 0 ? s.statStreak : ''}`}>
-                  {stats.streak > 0 ? `🔥 ${stats.streak}` : stats.streak}
+                  {stats.streak > 0 ? (
+                    <>
+                      <i className={`fa-solid fa-fire ${s.statStreakIcon}`} aria-hidden /> {stats.streak}
+                    </>
+                  ) : (
+                    stats.streak
+                  )}
                 </span>
                 <span className={s.statLabel}>дней подряд</span>
               </div>
