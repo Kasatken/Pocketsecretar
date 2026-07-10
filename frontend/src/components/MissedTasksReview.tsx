@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   fetchCalendarEvents,
   normalizeApiEvent,
@@ -15,7 +16,7 @@ type Props = {
   onChanged?: () => void
 }
 
-const MAX_SHOWN = 5
+const MAX_SHOWN = 6
 const QUARTER_MS = 15 * 60 * 1000
 
 function startOfYesterday(): Date {
@@ -25,9 +26,12 @@ function startOfYesterday(): Date {
   return d
 }
 
-/** Ближайшие «сегодня» 15 минут вперёд — чтобы перенесённое дело сразу стало предстоящим. */
-function nextQuarter(from: Date): Date {
-  return new Date(Math.ceil(from.getTime() / QUARTER_MS) * QUARTER_MS)
+/** Завтра в то же время дня, что и оригинал (предсказуемо и без наложений разных дел). */
+function tomorrowSameTime(original: Date): Date {
+  const start = new Date()
+  start.setDate(start.getDate() + 1)
+  start.setHours(original.getHours(), original.getMinutes(), 0, 0)
+  return start
 }
 
 function whenLabel(start: Date): string {
@@ -42,7 +46,7 @@ function whenLabel(start: Date): string {
   return `${start.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}, ${time}`
 }
 
-/** Мягкий разбор незакрытых дел (доводчик). Полностью самодостаточен: любая ошибка → ничего не рисуем. */
+/** Мягкий разбор незакрытых дел (доводчик) — лёгкое модальное окно поверх. Любая ошибка → просто не показываем. */
 export default function MissedTasksReview({ accessToken, onChanged }: Props) {
   const [items, setItems] = useState<NormalizedEvent[] | null>(null)
   const [dismissed, setDismissed] = useState(false)
@@ -64,7 +68,6 @@ export default function MissedTasksReview({ accessToken, onChanged }: Props) {
           .sort((a, b) => a.start.getTime() - b.start.getTime())
         setItems(missed)
       } catch {
-        // Доводчик не критичен: при любой ошибке просто ничего не показываем.
         if (!cancelled) setItems([])
       }
     })()
@@ -73,10 +76,13 @@ export default function MissedTasksReview({ accessToken, onChanged }: Props) {
     }
   }, [accessToken])
 
-  const removeItem = useCallback((id: string) => {
-    setItems((prev) => (prev ? prev.filter((e) => e.id !== id) : prev))
-    onChanged?.()
-  }, [onChanged])
+  const removeItem = useCallback(
+    (id: string) => {
+      setItems((prev) => (prev ? prev.filter((e) => e.id !== id) : prev))
+      onChanged?.()
+    },
+    [onChanged],
+  )
 
   const runAction = useCallback(
     async (id: string, fn: () => Promise<void>) => {
@@ -95,74 +101,96 @@ export default function MissedTasksReview({ accessToken, onChanged }: Props) {
     [accessToken, busyId, removeItem],
   )
 
-  if (!accessToken || dismissed || items === null || items.length === 0) return null
+  const open = !(!accessToken || dismissed || items === null || items.length === 0)
 
-  // Фиксируем в const, чтобы сужение string сохранялось внутри onClick-замыканий.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDismissed(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+
+  if (!open) return null
+
   const token = accessToken
   const shown = items.slice(0, MAX_SHOWN)
   const extra = items.length - shown.length
 
-  return (
-    <section className={s.card} aria-label="Незакрытые дела">
-      <div className={s.head}>
-        <div>
-          <h2 className={s.title}>Осталось незакрытым</h2>
-          <p className={s.subtitle}>Бывает. Быстро разберём — и с плеч долой.</p>
+  return createPortal(
+    <div className={s.overlay} role="dialog" aria-modal="true" aria-label="Незакрытые дела">
+      <button type="button" className={s.backdrop} aria-label="Закрыть" onClick={() => setDismissed(true)} />
+      <div className={s.panel}>
+        <div className={s.head}>
+          <div className={s.headText}>
+            <h2 className={s.title}>Осталось незакрытым</h2>
+            <p className={s.subtitle}>Бывает. Быстро разберём — и с плеч долой.</p>
+          </div>
+          <button type="button" className={s.close} onClick={() => setDismissed(true)} aria-label="Закрыть">
+            ×
+          </button>
         </div>
-        <button type="button" className={s.dismiss} onClick={() => setDismissed(true)}>
+
+        <ul className={s.list}>
+          {shown.map((ev) => {
+            const busy = busyId === ev.id
+            return (
+              <li key={ev.id} className={s.row} data-busy={busy || undefined}>
+                <div className={s.rowText}>
+                  <span className={s.rowTitle}>{ev.title}</span>
+                  <span className={s.rowWhen}>{whenLabel(ev.start)}</span>
+                </div>
+                <div className={s.actions}>
+                  <button
+                    type="button"
+                    className={`${s.btn} ${s.btnDone}`}
+                    disabled={busy}
+                    onClick={() => runAction(ev.id, () => completeCalendarEvent(token, ev.id).then(() => undefined))}
+                  >
+                    Сделал
+                  </button>
+                  <button
+                    type="button"
+                    className={`${s.btn} ${s.btnMove}`}
+                    disabled={busy}
+                    onClick={() =>
+                      runAction(ev.id, () => {
+                        const start = tomorrowSameTime(ev.start)
+                        const durationMs = Math.max(QUARTER_MS, ev.end.getTime() - ev.start.getTime())
+                        const end = new Date(start.getTime() + durationMs)
+                        return rescheduleCalendarEvent(token, ev.id, start, end)
+                      })
+                    }
+                  >
+                    Завтра
+                  </button>
+                  <button
+                    type="button"
+                    className={`${s.btn} ${s.btnDrop}`}
+                    disabled={busy}
+                    onClick={() => runAction(ev.id, () => deleteCalendarEvent(token, ev.id))}
+                  >
+                    Убрать
+                  </button>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+
+        {extra > 0 && <p className={s.more}>…и ещё {extra}</p>}
+        {error && (
+          <p className={s.error} role="status">
+            {error}
+          </p>
+        )}
+
+        <button type="button" className={s.later} onClick={() => setDismissed(true)}>
           Позже
         </button>
       </div>
-
-      <ul className={s.list}>
-        {shown.map((ev) => {
-          const busy = busyId === ev.id
-          return (
-            <li key={ev.id} className={s.row} data-busy={busy || undefined}>
-              <div className={s.rowText}>
-                <span className={s.rowTitle}>{ev.title}</span>
-                <span className={s.rowWhen}>{whenLabel(ev.start)}</span>
-              </div>
-              <div className={s.actions}>
-                <button
-                  type="button"
-                  className={`${s.btn} ${s.btnDone}`}
-                  disabled={busy}
-                  onClick={() => runAction(ev.id, () => completeCalendarEvent(token, ev.id).then(() => undefined))}
-                >
-                  Сделал
-                </button>
-                <button
-                  type="button"
-                  className={`${s.btn} ${s.btnMove}`}
-                  disabled={busy}
-                  onClick={() =>
-                    runAction(ev.id, () => {
-                      const durationMs = Math.max(QUARTER_MS, ev.end.getTime() - ev.start.getTime())
-                      const start = nextQuarter(new Date())
-                      const end = new Date(start.getTime() + durationMs)
-                      return rescheduleCalendarEvent(token, ev.id, start, end)
-                    })
-                  }
-                >
-                  На сегодня
-                </button>
-                <button
-                  type="button"
-                  className={`${s.btn} ${s.btnDrop}`}
-                  disabled={busy}
-                  onClick={() => runAction(ev.id, () => deleteCalendarEvent(token, ev.id))}
-                >
-                  Убрать
-                </button>
-              </div>
-            </li>
-          )
-        })}
-      </ul>
-
-      {extra > 0 && <p className={s.more}>…и ещё {extra}</p>}
-      {error && <p className={s.error} role="status">{error}</p>}
-    </section>
+    </div>,
+    document.body,
   )
 }
