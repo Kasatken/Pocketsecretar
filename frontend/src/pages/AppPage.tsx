@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowsRotate } from '@fortawesome/free-solid-svg-icons'
 import { Link, useNavigate } from 'react-router-dom'
-import { ClipboardList, Check, Pause, Play, Sparkles, Timer, Trash2, Trophy } from 'lucide-react'
+import { ClipboardList, Check, Focus, Pause, Play, Settings, Sparkles, Timer, Trash2, Trophy } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import type { User } from '../auth/AuthContext'
 import { formatPomodoroClock, phaseDurationSeconds, usePomodoro, type PomodoroPhase } from '../hooks/usePomodoro'
+import { PomodoroSettingsModal } from '../components/PomodoroSettingsModal'
 import { fetchCalendarEvents, fetchDailyAdvice, normalizeApiEvent, completeCalendarEvent, deleteCalendarEvent } from '../lib/calendarApi'
 import {
   dayKey,
@@ -45,20 +46,30 @@ function phaseLabelRu(phase: PomodoroPhase): string {
   }
 }
 
-function pomodoroDotsOn(phase: PomodoroPhase, completedWork: number): number {
-  if (phase === 'longBreak') return 4
-  return completedWork % 4
+function pomodoroDotsOn(phase: PomodoroPhase, completedWork: number, interval: number): number {
+  if (phase === 'longBreak') return interval
+  return completedWork % interval
 }
 
-function pomodoroStatusLine(phase: PomodoroPhase, completedWork: number): string {
+function pomodoroStatusLine(phase: PomodoroPhase, completedWork: number, interval: number): string {
   switch (phase) {
     case 'work':
-      return `Работа ${(completedWork % 4) + 1} из 4`
+      return `Работа ${(completedWork % interval) + 1} из ${interval}`
     case 'shortBreak':
       return 'Передышка перед следующим блоком'
     case 'longBreak':
-      return 'После четырёх блоков — отдых подольше'
+      return `После ${interval} блоков — отдых подольше`
   }
+}
+
+/** Текст в статусе, когда фаза сама завершилась и таймер ждёт подтверждения */
+function pomodoroReadyLine(nextPhase: PomodoroPhase): string {
+  return nextPhase === 'work' ? 'Перерыв закончился — пора поработать' : 'Работа завершена — время отдохнуть'
+}
+
+/** Короткая подпись кнопки при ожидании подтверждения — без громоздкого названия фазы */
+function pomodoroConfirmLabel(nextPhase: PomodoroPhase): string {
+  return nextPhase === 'work' ? 'Начать работу' : 'Начать перерыв'
 }
 
 /** Фазы суток — как теги состояния в UI Metaphor */
@@ -107,17 +118,21 @@ export default function AppPage() {
   const [skyTick, setSkyTick] = useState(0)
   const [calSyncGen, setCalSyncGen] = useState(0)
   const pomodoro = usePomodoro()
+  const [pomodoroSettingsOpen, setPomodoroSettingsOpen] = useState(false)
 
-  const pomodoroPhaseTotalSec = phaseDurationSeconds(pomodoro.phase)
+  const pomodoroPhaseTotalSec = phaseDurationSeconds(pomodoro.phase, pomodoro.settings)
   const pomodoroRingProgress =
     pomodoroPhaseTotalSec > 0 ? pomodoro.remaining / pomodoroPhaseTotalSec : 1
-  const pomodoroDotsFilled = pomodoroDotsOn(pomodoro.phase, pomodoro.completedWork)
+  const pomodoroDotsFilled = pomodoroDotsOn(pomodoro.phase, pomodoro.completedWork, pomodoro.settings.longBreakInterval)
   const pomodoroPhaseClass =
     pomodoro.phase === 'work'
       ? s.timerPhaseWork
       : pomodoro.phase === 'shortBreak'
         ? s.timerPhaseShort
         : s.timerPhaseLong
+  /** Активная рабочая фаза — приглушаем остальной дашборд, чтобы не отвлекать */
+  const pomodoroFocusActive = pomodoro.running && pomodoro.phase === 'work'
+  const focusDimCls = pomodoroFocusActive ? s.focusDimmed : ''
 
   /** Длина окружности SVG-кольца (viewBox 100×100, r=44). */
   const pomodoroRingLen = 2 * Math.PI * 44
@@ -229,12 +244,18 @@ export default function AppPage() {
         await refreshSession()
       } catch (err) {
         if (err instanceof Error && err.message === '401') {
-          const ok = await refreshSession()
-          if (!ok) {
+          const newToken = await refreshSession()
+          if (!newToken) {
             navigate('/login', { replace: true })
             return
           }
-          setTaskActionError('Сессия обновлена — попробуйте ещё раз')
+          try {
+            await completeCalendarEvent(newToken, ev.id)
+            markTaskCompleted(ev.id)
+            await refreshSession()
+          } catch (retryErr) {
+            setTaskActionError(retryErr instanceof Error ? retryErr.message : 'Не удалось отметить выполненным')
+          }
           return
         }
         setTaskActionError(err instanceof Error ? err.message : 'Не удалось отметить выполненным')
@@ -257,12 +278,17 @@ export default function AppPage() {
         removeTaskFromState(ev.id)
       } catch (err) {
         if (err instanceof Error && err.message === '401') {
-          const ok = await refreshSession()
-          if (!ok) {
+          const newToken = await refreshSession()
+          if (!newToken) {
             navigate('/login', { replace: true })
             return
           }
-          setTaskActionError('Сессия обновлена — попробуйте удалить ещё раз')
+          try {
+            await deleteCalendarEvent(newToken, ev.id)
+            removeTaskFromState(ev.id)
+          } catch (retryErr) {
+            setTaskActionError(retryErr instanceof Error ? retryErr.message : 'Не удалось удалить')
+          }
           return
         }
         setTaskActionError(err instanceof Error ? err.message : 'Не удалось удалить')
@@ -446,7 +472,7 @@ export default function AppPage() {
       <div className={s.shell}>
         <div className={s.todayLayout}>
           <div className={s.todayLeft}>
-            <header className={s.hero}>
+            <header className={`${s.hero} ${focusDimCls}`}>
               <p className={s.eyebrow}>Сегодня</p>
               <h1 className={s.h1}>
                 Привет, <span className={s.accent}>{displayLabel(user)}</span>
@@ -488,10 +514,26 @@ export default function AppPage() {
                       <Timer size={18} strokeWidth={2.25} />
                     </span>
                     <h2 className={s.cardTitle}>Pomodoro</h2>
+                    {pomodoroFocusActive ? (
+                      <span className={s.focusBadge}>
+                        <Focus size={13} strokeWidth={2.5} aria-hidden />
+                        Фокус
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={s.pomodoroSettingsBtn}
+                      aria-label="Настройки таймера"
+                      title="Настройки таймера"
+                      onClick={() => setPomodoroSettingsOpen(true)}
+                    >
+                      <Settings size={16} strokeWidth={2.25} aria-hidden />
+                    </button>
                   </div>
                   <div
                     className={`${s.timer} ${pomodoroPhaseClass}`}
                     data-running={pomodoro.running ? 'true' : undefined}
+                    data-awaiting={pomodoro.awaitingConfirmation ? 'true' : undefined}
                   >
                     <div className={s.timerBody}>
                       <div className={s.timerRingWrap}>
@@ -516,14 +558,18 @@ export default function AppPage() {
                       </div>
                       <div className={s.timerSide}>
                         <div className={s.timerDots} aria-hidden>
-                          {[0, 1, 2, 3].map((i) => (
+                          {Array.from({ length: pomodoro.settings.longBreakInterval }, (_, i) => (
                             <span
                               key={i}
                               className={i < pomodoroDotsFilled ? s.timerDotOn : s.timerDotOff}
                             />
                           ))}
                         </div>
-                        <p className={s.timerStatus}>{pomodoroStatusLine(pomodoro.phase, pomodoro.completedWork)}</p>
+                        <p className={s.timerStatus}>
+                          {pomodoro.awaitingConfirmation
+                            ? pomodoroReadyLine(pomodoro.phase)
+                            : pomodoroStatusLine(pomodoro.phase, pomodoro.completedWork, pomodoro.settings.longBreakInterval)}
+                        </p>
                         <div className={s.timerActions}>
                           <button type="button" className={s.timerBtn} onClick={pomodoro.toggle}>
                             {pomodoro.running ? (
@@ -531,9 +577,20 @@ export default function AppPage() {
                             ) : (
                               <Play size={18} strokeWidth={2.5} aria-hidden />
                             )}
-                            <span>{pomodoro.running ? 'Пауза' : 'Старт'}</span>
+                            <span>
+                              {pomodoro.running
+                                ? 'Пауза'
+                                : pomodoro.awaitingConfirmation
+                                  ? pomodoroConfirmLabel(pomodoro.phase)
+                                  : 'Старт'}
+                            </span>
                           </button>
-                          <button type="button" className={s.timerBtnSecondary} onClick={pomodoro.resetPhase}>
+                          <button
+                            type="button"
+                            className={s.timerBtnSecondary}
+                            title="Начать сессию заново с первого рабочего блока"
+                            onClick={pomodoro.resetSession}
+                          >
                             Сброс
                           </button>
                         </div>
@@ -542,7 +599,15 @@ export default function AppPage() {
                   </div>
                 </section>
 
-                <section className={`${s.card} ${s.progressCard}`}>
+                {pomodoroSettingsOpen ? (
+                  <PomodoroSettingsModal
+                    settings={pomodoro.settings}
+                    onSave={pomodoro.updateSettings}
+                    onClose={() => setPomodoroSettingsOpen(false)}
+                  />
+                ) : null}
+
+                <section className={`${s.card} ${s.progressCard} ${focusDimCls}`}>
                   <div className={s.cardHeader}>
                     <span className={s.cardIcon} aria-hidden>
                       <Trophy size={18} strokeWidth={2.25} />
@@ -555,7 +620,7 @@ export default function AppPage() {
                 </section>
               </div>
 
-              <section className={`${s.card} ${s.aiAdviceCard}`}>
+              <section className={`${s.card} ${s.aiAdviceCard} ${focusDimCls}`}>
                 <div className={`${s.cardHeader} ${s.aiAdviceHeader}`}>
                   <div className={s.aiAdviceHeaderLeft}>
                     <span className={s.cardIcon} aria-hidden>
@@ -633,7 +698,7 @@ export default function AppPage() {
             </div>
 
             <section
-              className={s.dayGauge}
+              className={`${s.dayGauge} ${focusDimCls}`}
               aria-label={`День прошёл примерно на ${dayGaugeFilled} из ${DAY_GAUGE_SEGMENTS} долей`}
             >
               <span className={s.dayGaugeCaption}>Ход дня</span>
@@ -659,7 +724,7 @@ export default function AppPage() {
             </section>
           </div>
 
-          <aside className={s.todayRight} aria-label="Задачи на сегодня">
+          <aside className={`${s.todayRight} ${focusDimCls}`} aria-label="Задачи на сегодня">
             <section className={`${s.card} ${s.tasksCard}`}>
               <div className={s.cardHeader}>
                 <span className={s.cardIcon} aria-hidden>

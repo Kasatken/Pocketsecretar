@@ -34,7 +34,8 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, displayName: string) => Promise<void>
   logout: () => Promise<void>
-  refreshSession: () => Promise<boolean>
+  /** Returns new access token on success, false on failure. */
+  refreshSession: () => Promise<string | false>
   updateProfile: (patch: ProfilePatch) => Promise<void>
   uploadAvatar: (file: File) => Promise<void>
   /** Активация Pro по промокоду (сервер: PRO_PROMO_CODE). */
@@ -82,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
   }
 
-  async function refreshSession() {
+  async function refreshSession(): Promise<string | false> {
     const response = await fetch(`${API}/refresh`, {
       method: 'POST',
       credentials: 'include',
@@ -95,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const payload = (await response.json()) as AuthPayload
     setUser(payload.user)
     setAccessToken(payload.access_token)
-    return true
+    return payload.access_token
   }
 
   async function updateProfile(patch: ProfilePatch) {

@@ -50,6 +50,8 @@ func main() {
 	backlog := handlers.NewBacklogIdeasHandler(cfg, googleLinks, backlogIdeas)
 	collabRepo := repository.NewCollabRepository(db)
 	collab := handlers.NewCollabHandler(cfg, googleLinks, users, collabRepo)
+	weeklyRepo := repository.NewWeeklyReportRepository(db)
+	weeklyReport := handlers.NewWeeklyReportHandler(cfg, users, googleLinks, calendarCompletions, smartTaskQuota, weeklyRepo)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", handlers.Health)
@@ -79,6 +81,8 @@ func main() {
 	mux.Handle("POST /api/backlog/ideas", middleware.RequireAuth(tokens, http.HandlerFunc(backlog.CreateIdea)))
 	mux.Handle("DELETE /api/backlog/ideas/{id}", middleware.RequireAuth(tokens, http.HandlerFunc(backlog.DeleteIdea)))
 	mux.Handle("POST /api/backlog/ideas/{id}/schedule", middleware.RequireAuth(tokens, http.HandlerFunc(backlog.ScheduleIdea)))
+
+	mux.Handle("GET /api/reports/weekly", middleware.RequireAuth(tokens, weeklyReport))
 
 	mux.Handle("POST /api/spaces/join", middleware.RequireAuth(tokens, http.HandlerFunc(collab.JoinSpace)))
 	mux.Handle("GET /api/spaces/calendar-overlays", middleware.RequireAuth(tokens, http.HandlerFunc(collab.ListCalendarAcceptedOverlays)))

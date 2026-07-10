@@ -332,7 +332,12 @@ func (h *CollabHandler) GetSpace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s, err := h.collab.GetSpace(ctx, spaceID)
-	if err != nil || s == nil {
+	if err != nil {
+		log.Printf("collab get space: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load space"})
+		return
+	}
+	if s == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "space not found"})
 		return
 	}
@@ -398,7 +403,12 @@ func (h *CollabHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	mem, err := h.collab.GetMembership(ctx, spaceID, userID)
-	if err != nil || mem == nil {
+	if err != nil {
+		log.Printf("collab list members get membership: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	if mem == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "space not found"})
 		return
 	}
@@ -468,7 +478,12 @@ func (h *CollabHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	mem, err := h.collab.GetMembership(ctx, spaceID, userID)
-	if err != nil || mem == nil {
+	if err != nil {
+		log.Printf("collab create invite get membership: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	if mem == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "space not found"})
 		return
 	}
@@ -586,7 +601,12 @@ func (h *CollabHandler) ListProposals(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	mem, err := h.collab.GetMembership(ctx, spaceID, userID)
-	if err != nil || mem == nil {
+	if err != nil {
+		log.Printf("collab list proposals get membership: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	if mem == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "space not found"})
 		return
 	}
@@ -647,7 +667,12 @@ func (h *CollabHandler) CreateProposal(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	mem, err := h.collab.GetMembership(ctx, spaceID, userID)
-	if err != nil || mem == nil {
+	if err != nil {
+		log.Printf("collab create proposal get membership: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	if mem == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "space not found"})
 		return
 	}
@@ -656,7 +681,12 @@ func (h *CollabHandler) CreateProposal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	okAssignee, err := h.collab.IsMember(ctx, spaceID, body.AssigneeID)
-	if err != nil || !okAssignee {
+	if err != nil {
+		log.Printf("collab create proposal is member: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	if !okAssignee {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "assignee must be a member of the space"})
 		return
 	}
@@ -732,7 +762,12 @@ func (h *CollabHandler) RespondProposal(w http.ResponseWriter, r *http.Request) 
 	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 	defer cancel()
 	inSpace, err := h.collab.IsMember(ctx, spaceID, userID)
-	if err != nil || !inSpace {
+	if err != nil {
+		log.Printf("collab respond proposal is member: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	if !inSpace {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "space not found"})
 		return
 	}

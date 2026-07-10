@@ -92,7 +92,7 @@ export type ScheduleBacklogResponse = {
   warning?: string
 }
 
-/** Если задано `start_time` (`HH:MM`), в календаре создаётся событие с временем (час по умолчанию). Иначе — на весь день. */
+/** Если задано `start_time` (`HH:MM`), событие создаётся с этим временем (длит. 1 ч). Иначе — ИИ выбирает подходящий слот в рабочем дне. */
 export type ScheduleBacklogOptions = {
   start_time?: string
   end_time?: string

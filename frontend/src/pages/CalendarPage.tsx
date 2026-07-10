@@ -353,6 +353,17 @@ export default function CalendarPage() {
     quota != null &&
     quota.limit - quota.used < Math.max(2, Math.ceil(quota.limit * 0.25))
 
+  const runSmartAddOnce = async (token: string, text: string) => {
+    const today = localDateISO(new Date())
+    const res = await postSmartTask(token, text, today)
+    setSmartText('')
+    const n = res.tasks?.length ?? 0
+    const tail = res.daily_limit_truncated ? ' (часть не вошла в дневной лимит)' : ''
+    setSmartOk(n > 0 ? `Добавлено в календарь: ${n} ${pluralEvents(n)}${tail}` : 'Готово')
+    await refreshSession()
+    setCalTick((k: number) => k + 1)
+  }
+
   const runSmartAdd = async (e: FormEvent) => {
     e.preventDefault()
     if (smartBusy) return
@@ -370,34 +381,24 @@ export default function CalendarPage() {
     setSmartError(null)
     setSmartOk(null)
     try {
-      const today = localDateISO(new Date())
-      const res = await postSmartTask(accessToken, t, today)
-      setSmartText('')
-      const n = res.tasks?.length ?? 0
-      const tail = res.daily_limit_truncated ? ' (часть не вошла в дневной лимит)' : ''
-      setSmartOk(
-        n > 0 ? `Добавлено в календарь: ${n} ${pluralEvents(n)}${tail}` : 'Готово',
-      )
-      await refreshSession()
-      setCalTick((k: number) => k + 1)
+      await runSmartAddOnce(accessToken, t)
     } catch (err) {
       if (err instanceof Error && err.message === '401') {
-        const ok = await refreshSession()
-        if (!ok) {
+        const newToken = await refreshSession()
+        if (!newToken) {
           navigate('/login', { replace: true })
           return
         }
-        setSmartError('Сессия обновлена — попробуйте ещё раз')
+        try {
+          await runSmartAddOnce(newToken, t)
+        } catch (retryErr) {
+          setSmartError(smartTaskUserMessage(retryErr))
+          if (retryErr instanceof SmartTaskError) await refreshSession()
+        }
         return
       }
       if (err instanceof SmartTaskError) {
-        let m = err.message
-        if (err.status === 403) {
-          const st = parseSmartTasksToday(err.payload)
-          const hint = st?.resets_at ? formatQuotaResetsAtHint(st.resets_at) : ''
-          if (hint) m = `${m} ${hint}`
-        }
-        setSmartError(m)
+        setSmartError(smartTaskUserMessage(err))
         await refreshSession()
         return
       }
@@ -489,8 +490,8 @@ export default function CalendarPage() {
       return
     }
     const dateStr = localDateISO(d)
-    const execute = async () => {
-      await scheduleBacklogViaSmartTask(accessToken, snapshot, dateStr, opts)
+    const execute = async (token: string) => {
+      await scheduleBacklogViaSmartTask(token, snapshot, dateStr, opts)
       setBacklogRefreshKey((x) => x + 1)
       setCalTick((x) => x + 1)
       await refreshSession()
@@ -498,16 +499,16 @@ export default function CalendarPage() {
     }
     setBacklogAiBusy(true)
     try {
-      await execute()
+      await execute(accessToken)
     } catch (err) {
       if (err instanceof Error && err.message === '401') {
-        const ok = await refreshSession()
-        if (!ok) {
+        const newToken = await refreshSession()
+        if (!newToken) {
           navigate('/login', { replace: true })
           return
         }
         try {
-          await execute()
+          await execute(newToken)
         } catch (e2) {
           setBacklogDropError(smartTaskUserMessage(e2))
         }
@@ -534,12 +535,17 @@ export default function CalendarPage() {
       removeEventFromState(ev.id)
     } catch (err) {
       if (err instanceof Error && err.message === '401') {
-        const ok = await refreshSession()
-        if (!ok) {
+        const newToken = await refreshSession()
+        if (!newToken) {
           navigate('/login', { replace: true })
           return
         }
-        setDeleteEventError('Сессия обновлена — попробуйте удалить ещё раз')
+        try {
+          await deleteCalendarEvent(newToken, ev.id)
+          removeEventFromState(ev.id)
+        } catch (retryErr) {
+          setDeleteEventError(retryErr instanceof Error ? retryErr.message : 'Не удалось удалить')
+        }
         return
       }
       setDeleteEventError(err instanceof Error ? err.message : 'Не удалось удалить')
@@ -559,12 +565,18 @@ export default function CalendarPage() {
       await refreshSession()
     } catch (err) {
       if (err instanceof Error && err.message === '401') {
-        const ok = await refreshSession()
-        if (!ok) {
+        const newToken = await refreshSession()
+        if (!newToken) {
           navigate('/login', { replace: true })
           return
         }
-        setDeleteEventError('Сессия обновлена — попробуйте ещё раз')
+        try {
+          await completeCalendarEvent(newToken, ev.id)
+          markEventCompletedInState(ev.id)
+          await refreshSession()
+        } catch (retryErr) {
+          setDeleteEventError(retryErr instanceof Error ? retryErr.message : 'Не удалось отметить выполненным')
+        }
         return
       }
       setDeleteEventError(err instanceof Error ? err.message : 'Не удалось отметить выполненным')

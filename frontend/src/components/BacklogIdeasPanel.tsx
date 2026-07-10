@@ -118,7 +118,7 @@ export type BacklogIdeasPanelProps = {
   refreshKey: number
   onRefreshCalendar: () => void
   onModalLockChange?: (locked: boolean) => void
-  refreshSession: () => Promise<boolean>
+  refreshSession: () => Promise<string | false>
   navigateLogin: () => void
   /** Квота из /api/auth/me; лимит зависит от тарифа и приходит с бэкенда. */
   smartTasksToday?: User['smart_tasks_today'] | null
@@ -166,13 +166,13 @@ export function BacklogIdeasPanel({
       setIdeas(rows)
     } catch (e) {
       if (e instanceof Error && e.message === '401') {
-        const ok = await refreshSession()
-        if (!ok) {
+        const newToken = await refreshSession()
+        if (!newToken) {
           navigateLogin()
           return
         }
         try {
-          const rows = await fetchBacklogIdeas(accessToken)
+          const rows = await fetchBacklogIdeas(newToken)
           setIdeas(rows)
           return
         } catch {
@@ -224,22 +224,25 @@ export function BacklogIdeasPanel({
     const tag = resolvedDraftTag()
     setCreateBusy(true)
     setCreateErr(null)
-    try {
-      const row = await createBacklogIdea(accessToken, {
-        body,
-        color_id: draftColor,
-        tag,
-      })
+    const doCreate = async (token: string) => {
+      const row = await createBacklogIdea(token, { body, color_id: draftColor, tag })
       setIdeas((prev) => [row, ...prev])
       closeCreate()
+    }
+    try {
+      await doCreate(accessToken)
     } catch (err) {
       if (err instanceof Error && err.message === '401') {
-        const ok = await refreshSession()
-        if (!ok) {
+        const newToken = await refreshSession()
+        if (!newToken) {
           navigateLogin()
           return
         }
-        setCreateErr('Сессия обновлена — попробуйте ещё раз')
+        try {
+          await doCreate(newToken)
+        } catch (retryErr) {
+          setCreateErr(retryErr instanceof Error ? retryErr.message : 'Ошибка сохранения')
+        }
         return
       }
       setCreateErr(err instanceof Error ? err.message : 'Ошибка сохранения')
@@ -256,22 +259,22 @@ export function BacklogIdeasPanel({
       color_id: idea.color_id,
       tag: idea.tag,
     }
-    const run = async () => {
-      await scheduleBacklogViaSmartTask(accessToken, snapshot, date, opts)
+    const run = async (token: string) => {
+      await scheduleBacklogViaSmartTask(token, snapshot, date, opts)
       setIdeas((prev) => prev.filter((x) => x.id !== idea.id))
       onRefreshCalendar()
       await refreshSession()
     }
     try {
-      await run()
+      await run(accessToken)
     } catch (err) {
       if (err instanceof Error && err.message === '401') {
-        const ok = await refreshSession()
-        if (!ok) {
+        const newToken = await refreshSession()
+        if (!newToken) {
           navigateLogin()
           return
         }
-        await run()
+        await run(newToken)
         return
       }
       throw err
@@ -285,12 +288,12 @@ export function BacklogIdeasPanel({
       setIdeas((prev) => prev.filter((x) => x.id !== ideaId))
     } catch (err) {
       if (err instanceof Error && err.message === '401') {
-        const ok = await refreshSession()
-        if (!ok) {
+        const newToken = await refreshSession()
+        if (!newToken) {
           navigateLogin()
           return
         }
-        await deleteBacklogIdea(accessToken, ideaId)
+        await deleteBacklogIdea(newToken, ideaId)
         setIdeas((prev) => prev.filter((x) => x.id !== ideaId))
         return
       }
@@ -440,8 +443,8 @@ export function BacklogIdeasPanel({
                 <div>
                   <p className={bp.helpStepTitle}>Отправьте в Google Календарь</p>
                   <p className={bp.helpStepText}>
-                    Иконка с волшебной палочкой создаёт событие через умного помощника на выбранную дату. Пустое время
-                    означает событие на весь день.
+                    Иконка с волшебной палочкой создаёт событие через умного помощника на выбранную дату. Если время не
+                    указано, ИИ сам подберёт подходящий слот в рабочем дне.
                   </p>
                 </div>
               </li>
@@ -663,7 +666,7 @@ function StickerCard({
               value={timeVal}
               onChange={(e) => setTimeVal(e.target.value)}
               disabled={schedBusy || !draggable}
-              aria-label="Время (пусто — весь день)"
+              aria-label="Время (пусто — ИИ выберет сам)"
             />
           </div>
         ) : null}

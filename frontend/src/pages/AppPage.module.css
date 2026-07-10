@@ -56,7 +56,7 @@
   grid-template-rows: minmax(0, 1fr);
   gap: var(--s2);
   align-items: stretch;
-  max-height: calc(100dvh - 10.5rem);
+  max-height: min(calc(100dvh - 10.5rem), 680px);
 }
 
 .todayLeft {
@@ -949,9 +949,11 @@
 
 .timerDots {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.32rem;
   align-items: center;
   justify-content: center;
+  max-width: 9rem;
 }
 
 .timerDotOn,
@@ -1000,6 +1002,7 @@
   border-radius: 6px;
   font-size: 0.875rem;
   font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
   box-shadow: 2px 2px 0 0 var(--text);
   transition: transform 0.1s, box-shadow 0.12s;
@@ -1056,6 +1059,70 @@
   }
 }
 
+.timer[data-awaiting='true'] .timerBtn {
+  animation: timerAwaitPulse 1.1s ease-in-out infinite;
+}
+
+.focusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.16rem 0.5rem;
+  border: 1px solid rgba(24, 138, 0, 0.32);
+  border-radius: 999px;
+  background: rgba(24, 138, 0, 0.12);
+  color: var(--dark);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.pomodoroSettingsBtn {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1.5px solid var(--gold-dark);
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(201, 162, 39, 0.12) 100%);
+  color: var(--royal);
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.pomodoroSettingsBtn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Режим фокуса: приглушаем остальной дашборд, пока идёт рабочая фаза */
+.focusDimmed {
+  opacity: 0.42;
+  filter: saturate(0.55);
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+
+.focusDimmed:hover {
+  opacity: 0.85;
+  filter: saturate(0.85);
+}
+
+@keyframes timerAwaitPulse {
+  0%,
+  100% {
+    box-shadow: 2px 2px 0 0 var(--text);
+  }
+  50% {
+    box-shadow: 0 0 0 6px var(--timer-arc-soft);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .timerRingArc {
     transition: none;
@@ -1065,8 +1132,16 @@
     animation: none;
   }
 
+  .timer[data-awaiting='true'] .timerBtn {
+    animation: none;
+  }
+
   .timerDotOn,
   .timerDotOff {
+    transition: none;
+  }
+
+  .focusDimmed {
     transition: none;
   }
 }
@@ -1121,6 +1196,15 @@
 
 .aiGuillemetEnd {
   margin-left: 0.1em;
+}
+
+/* На очень высоких мониторах (1440p и выше) чуть расширяем допустимую высоту,
+   но не выше 740px — чтобы пустое пространство при малом числе событий
+   не занимало половину экрана. */
+@media (min-height: 1000px) and (min-width: 961px) {
+  .todayLayout {
+    max-height: min(calc(100dvh - 10.5rem), 740px);
+  }
 }
 
 @media (max-width: 960px) {
@@ -1321,6 +1405,12 @@
   .timerBtnSecondary {
     min-height: 30px;
     font-size: 0.82rem;
+  }
+
+  /* Бейдж фокуса + шестерёнка настроек не должны сжимать заголовок на узких экранах */
+  .timerCard .cardHeader {
+    flex-wrap: wrap;
+    row-gap: 0.3rem;
   }
 
   .taskIconBtn {

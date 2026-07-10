@@ -58,7 +58,9 @@ export function buildBacklogSmartPrompt(
       `Начало в ${opts.start_time.trim()}, длительность ровно 1 час, не all-day. Часовой пояс Europe/Moscow.`,
     )
   } else {
-    lines.push('Событие на весь этот календарный день (all-day).')
+    lines.push(
+      'Выбери оптимальное время в рабочем дне (не all-day): старт с 9:00 до 18:00, длительность 1 час. Часовой пояс Europe/Moscow.',
+    )
   }
   lines.push(
     'Не добавляй других событий и подзадач — только это одно. Не переноси на другую дату.',

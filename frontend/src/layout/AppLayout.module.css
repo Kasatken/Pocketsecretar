@@ -321,6 +321,36 @@
   z-index: 1;
 }
 
+/* ── Большие экраны: расширяем контейнер, чтобы блоки не выглядели
+   чрезмерно растянутыми или зажатыми в узкую полосу ── */
+@media (min-width: 1440px) {
+  .topBarInner {
+    max-width: 1380px;
+  }
+
+  .main {
+    max-width: 1380px;
+  }
+
+  .pendingBarWrap {
+    max-width: 1380px;
+  }
+}
+
+@media (min-width: 1800px) {
+  .topBarInner {
+    max-width: 1600px;
+  }
+
+  .main {
+    max-width: 1600px;
+  }
+
+  .pendingBarWrap {
+    max-width: 1600px;
+  }
+}
+
 @media (max-width: 720px) {
   .topBarInner {
     grid-template-columns: auto 1fr auto;

@@ -1,0 +1,223 @@
+:root {
+  --card: #ffffff;
+  --text: #1a1a1a;
+  --muted: #6b6b6b;
+  --accent: #188a00;
+  --royal: #1a2744;
+  --gold-line: rgba(201, 162, 39, 0.42);
+  --s1: 0.382rem;
+  --s2: 0.618rem;
+  --s3: 1rem;
+  --s4: 1.618rem;
+}
+
+.modalRoot {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s4);
+  box-sizing: border-box;
+}
+
+.modalBackdrop {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: rgba(26, 39, 68, 0.38);
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+}
+
+.modalPanel {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border: 2px solid var(--text);
+  border-radius: 10px;
+  box-shadow: 4px 4px 0 0 var(--text), inset 0 0 0 1px var(--gold-line);
+  overflow: hidden;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-bottom: 2px solid var(--text);
+  background: linear-gradient(155deg, rgba(26, 39, 68, 0.08) 0%, transparent 52%), #e5f5ec;
+}
+
+.modalTitle {
+  margin: 0;
+  font-family: 'Merriweather', Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.modalClose {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  line-height: 1;
+  border: 2px solid var(--text);
+  border-radius: 8px;
+  background: var(--card);
+  cursor: pointer;
+  box-shadow: 2px 2px 0 0 var(--text);
+  transition: transform 0.1s ease;
+}
+
+.modalClose:hover {
+  transform: translate(-1px, -1px);
+}
+
+.body {
+  padding: var(--s3) var(--s4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  max-height: min(70vh, 30rem);
+  overflow-y: auto;
+}
+
+.presetRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.presetBtn {
+  padding: var(--s1) var(--s3);
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 2px solid var(--text);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 2px 2px 0 0 rgba(143, 115, 25, 0.35);
+  transition: transform 0.1s, box-shadow 0.12s;
+}
+
+.presetBtn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 0 var(--text);
+}
+
+.presetBtnActive {
+  background: var(--royal);
+  color: #fff;
+  box-shadow: 2px 2px 0 0 var(--text);
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s3);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.fieldLabel {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.fieldInput {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.4rem var(--s2);
+  border: 2px solid var(--text);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  min-width: 0;
+}
+
+.fieldInput:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid rgba(26, 39, 68, 0.14);
+}
+
+.cancelBtn {
+  padding: var(--s2) var(--s3);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+  border: 2px solid var(--text);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 2px 2px 0 0 rgba(143, 115, 25, 0.35);
+  transition: transform 0.1s, box-shadow 0.12s;
+}
+
+.cancelBtn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 0 var(--text);
+}
+
+.saveBtn {
+  padding: var(--s2) var(--s4);
+  background: linear-gradient(180deg, #1faa08 0%, var(--accent) 100%);
+  color: #fff;
+  border: 2px solid var(--text);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 0 var(--text);
+  transition: transform 0.1s, box-shadow 0.12s;
+}
+
+.saveBtn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 0 var(--royal);
+}
+
+.saveBtn:active,
+.cancelBtn:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+@media (max-width: 480px) {
+  .fieldGrid {
+    grid-template-columns: 1fr;
+  }
+}

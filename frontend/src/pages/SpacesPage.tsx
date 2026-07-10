@@ -31,6 +31,12 @@ export default function SpacesPage() {
   const [joinOk, setJoinOk] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
 
+  useEffect(() => {
+    if (!joinOk) return
+    const tid = setTimeout(() => setJoinOk(null), 4000)
+    return () => clearTimeout(tid)
+  }, [joinOk])
+
   const load = async () => {
     if (!accessToken) return
     setErr(null)
@@ -39,7 +45,7 @@ export default function SpacesPage() {
       const rows = await fetchSpaces(accessToken)
       setSpaces(rows)
     } catch (e) {
-      if (e instanceof Error && e.message === '401') {
+      if (e instanceof Error && (e.message === '401' || e.message.toLowerCase().includes('unauthorized'))) {
         const ok = await refreshSession()
         if (!ok) navigate('/login', { replace: true })
         return
@@ -75,7 +81,7 @@ export default function SpacesPage() {
         await load()
       })
       .catch((e) => {
-        if (e instanceof Error && e.message === '401') {
+        if (e instanceof Error && (e.message === '401' || e.message.toLowerCase().includes('unauthorized'))) {
           void refreshSession().then((ok) => {
             if (!ok) navigate('/login', { replace: true })
           })

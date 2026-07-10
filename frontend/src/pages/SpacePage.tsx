@@ -69,7 +69,7 @@ export default function SpacePage() {
   const { id } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const { accessToken, user } = useAuth()
+  const { accessToken, user, refreshSession } = useAuth()
   const myId = user?.id
   const spaceId = id ? parseInt(id, 10) : NaN
   const proposalsSectionRef = useRef<HTMLElement | null>(null)
@@ -114,6 +114,12 @@ export default function SpacePage() {
   const spaceIdRef = useRef(spaceId)
   spaceIdRef.current = spaceId
 
+  useEffect(() => {
+    if (!flash) return
+    const tid = setTimeout(() => setFlash(null), 4000)
+    return () => clearTimeout(tid)
+  }, [flash])
+
   const loadAll = useCallback(async () => {
     const sid = spaceIdRef.current
     if (!Number.isFinite(sid) || sid < 1) {
@@ -135,12 +141,17 @@ export default function SpacePage() {
       setProposals(pr)
     } catch (e) {
       if (spaceIdRef.current !== sid) return
+      if (e instanceof Error && (e.message === '401' || e.message.toLowerCase().includes('unauthorized'))) {
+        const ok = await refreshSession()
+        if (!ok) navigate('/login', { replace: true })
+        return
+      }
       setErr(e instanceof Error ? e.message : 'Ошибка загрузки')
       setSpace(null)
     } finally {
       if (spaceIdRef.current === sid) setLoading(false)
     }
-  }, [accessToken])
+  }, [accessToken, refreshSession, navigate])
 
   useEffect(() => {
     void loadAll()
@@ -194,6 +205,7 @@ export default function SpacePage() {
     if (!accessToken || !space) return
     setInviteBusy(true)
     setErr(null)
+    setFlash(null)
     setInviteToken(null)
     try {
       const out = await createSpaceInvite(accessToken, space.id, {
@@ -216,6 +228,7 @@ export default function SpacePage() {
     if (!accessToken || !space) return
     setInviteBusy(true)
     setErr(null)
+    setFlash(null)
     setInviteToken(null)
     try {
       const out = await createSpaceInvite(accessToken, space.id, {
@@ -241,6 +254,7 @@ export default function SpacePage() {
     if (!accessToken || !space) return
     setPropBusy(true)
     setErr(null)
+    setFlash(null)
     try {
       const ps = localInputToISO(pStart)
       const pe = localInputToISO(pEnd)
@@ -268,6 +282,7 @@ export default function SpacePage() {
   const onRespond = async (proposalId: number, status: 'accepted' | 'declined') => {
     if (!accessToken || !space) return
     setErr(null)
+    setFlash(null)
     try {
       const out = await respondToProposal(accessToken, space.id, proposalId, {
         status,
@@ -293,6 +308,7 @@ export default function SpacePage() {
     if (!ok) return
     setDeleteBusy(true)
     setErr(null)
+    setFlash(null)
     try {
       await deleteSpace(accessToken, space.id)
       notifyPendingProposalsChanged()
@@ -320,6 +336,10 @@ export default function SpacePage() {
   const isCoordinator = space?.my_role === 'coordinator'
   const canPropose = space && space.my_role !== 'observer'
   const isCreator = space != null && myId != null && space.created_by === myId
+
+  const memberNameById = new Map(
+    members.map((m) => [m.user_id, m.display_name?.trim() || m.email]),
+  )
 
   return (
     <div className={a.page}>
@@ -675,7 +695,9 @@ export default function SpacePage() {
                         </span>
                         <p className={s.proposalTitle}>{p.title}</p>
                         <p className={a.muted}>
-                          #{p.author_id} → #{p.assignee_id}
+                          {memberNameById.get(p.author_id) ?? `#${p.author_id}`}
+                          {' → '}
+                          {memberNameById.get(p.assignee_id) ?? `#${p.assignee_id}`}
                           {p.proposed_start && p.proposed_end
                             ? ` · ${new Date(p.proposed_start).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })} — ${new Date(p.proposed_end).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}`
                             : ''}

@@ -1,10 +1,11 @@
 import { createPortal } from 'react-dom'
-import { useEffect, useId, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import type { User } from '../auth/AuthContext'
 import { CHRONOTYPE_OPTIONS, chronotypeLabel } from '../lib/chronotypes'
 import { formatQuotaResetsAtHint } from '../lib/smartTaskQuota'
+import { fetchWeeklyReport, formatEventStart, type WeeklyReport } from '../lib/weeklyReportApi'
 import { LevelProgress } from '../components/LevelProgress'
 import s from './ProfilePage.module.css'
 
@@ -660,6 +661,8 @@ export default function ProfilePage() {
           </section>
         )}
 
+        <WeeklyReportSection accessToken={accessToken} />
+
         <section
           className={`${s.card} ${s.cardPromo} ${s.promoFullRow}`}
           aria-labelledby="promo-heading"
@@ -734,4 +737,214 @@ export default function ProfilePage() {
       </div>
     </div>
   )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Компонент еженедельного AI-отчёта
+// ─────────────────────────────────────────────────────────────────────────────
+
+function WeeklyReportSection({ accessToken }: { accessToken: string | null }) {
+  const [report, setReport] = useState<WeeklyReport | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  // Сохраняем токен отмены, чтобы не обновлять state после размонтирования
+  const cancelRef = useRef(false)
+
+  useEffect(() => {
+    cancelRef.current = false
+    return () => { cancelRef.current = true }
+  }, [])
+
+  const load = async () => {
+    if (!accessToken || loading) return
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await fetchWeeklyReport(accessToken)
+      if (!cancelRef.current) setReport(data)
+    } catch (err) {
+      if (!cancelRef.current)
+        setError(err instanceof Error && err.message !== '500' ? err.message : 'Не удалось загрузить отчёт')
+    } finally {
+      if (!cancelRef.current) setLoading(false)
+    }
+  }
+
+  const maxCount = report
+    ? Math.max(...report.completions_by_day.map((d) => d.count), 1)
+    : 1
+
+  return (
+    <section
+      className={`${s.card} ${s.cardWeekly} ${s.sheetFullRow}`}
+      aria-labelledby="weekly-heading"
+    >
+      <div className={s.cardHeader}>
+        <span className={s.cardIcon} aria-hidden>
+          <i className={`fa-solid fa-chart-bar ${s.faCardIcon}`} />
+        </span>
+        <div className={s.cardHeaderText}>
+          <p className={s.cardEyebrow}>Аналитика</p>
+          <h2 id="weekly-heading" className={s.cardTitle}>
+            Отчёт за неделю
+            {report ? <span className={s.weeklyLabel}>{report.week_label}</span> : null}
+          </h2>
+        </div>
+        {report && (
+          <button
+            type="button"
+            className={s.editToggleBtn}
+            onClick={() => void load()}
+            disabled={loading}
+            title="Обновить отчёт"
+            aria-label="Обновить отчёт"
+          >
+            <i className={`fa-solid fa-rotate-right ${s.faEditIcon} ${loading ? s.spinIcon : ''}`} aria-hidden />
+          </button>
+        )}
+      </div>
+
+      {/* ── Начальное состояние: кнопка загрузки ── */}
+      {!report && !loading && !error && (
+        <div className={s.weeklyIdle}>
+          <p className={s.weeklyIdleText}>
+            AI проанализирует вашу неделю, сравнит с прошлой и даст совет на следующую.
+          </p>
+          <button
+            type="button"
+            className={s.weeklyLoadBtn}
+            onClick={() => void load()}
+          >
+            Сформировать отчёт
+          </button>
+        </div>
+      )}
+
+      {/* ── Загрузка ── */}
+      {loading && (
+        <div className={s.weeklyLoading} role="status" aria-live="polite">
+          <span className={s.weeklySpinner} aria-hidden />
+          <span className={s.weeklyLoadingText}>AI анализирует вашу неделю…</span>
+        </div>
+      )}
+
+      {/* ── Ошибка ── */}
+      {error && !loading && (
+        <div className={s.weeklyError} role="alert">
+          <span>{error}</span>
+          <button type="button" className={s.weeklyRetryBtn} onClick={() => void load()}>
+            Повторить
+          </button>
+        </div>
+      )}
+
+      {/* ── Основное содержимое отчёта ── */}
+      {report && !loading && (
+        <div className={s.weeklyBody}>
+
+          {/* ── Строка метрик ── */}
+          <div className={s.weeklyMetrics}>
+            <div className={s.weeklyMetric}>
+              <span className={s.weeklyMetricValue}>{report.completed_this_week}</span>
+              <span className={s.weeklyMetricLabel}>задач выполнено</span>
+              {report.delta_pct !== null && (
+                <span
+                  className={
+                    report.delta_pct > 0
+                      ? s.weeklyDeltaPos
+                      : report.delta_pct < 0
+                        ? s.weeklyDeltaNeg
+                        : s.weeklyDeltaFlat
+                  }
+                >
+                  {report.delta_pct > 0 ? '↑' : report.delta_pct < 0 ? '↓' : '='}&thinsp;
+                  {Math.abs(report.delta_pct)}%
+                </span>
+              )}
+            </div>
+            <div className={s.weeklyMetric}>
+              <span className={s.weeklyMetricValue}>{report.smart_tasks_this_week}</span>
+              <span className={s.weeklyMetricLabel}>AI-задач создано</span>
+            </div>
+            <div className={s.weeklyMetric}>
+              <span className={`${s.weeklyMetricValue} ${report.streak > 0 ? s.weeklyStreakVal : ''}`}>
+                {report.streak > 0 ? `🔥 ${report.streak}` : report.streak}
+              </span>
+              <span className={s.weeklyMetricLabel}>дней подряд</span>
+            </div>
+          </div>
+
+          {/* ── Бар-чарт по дням ── */}
+          <div className={s.weeklyChartWrap}>
+            <div className={s.weeklyChart} aria-label="Выполненные задачи по дням недели" role="img">
+              {report.completions_by_day.map((d, i) => {
+                const isBest =
+                  report.best_day.count > 0 && d.weekday === report.best_day.weekday
+                const barH = Math.max(4, Math.round((d.count / maxCount) * 64))
+                return (
+                  <div key={i} className={s.barCol} aria-label={`${d.weekday}: ${d.count}`}>
+                    <span className={s.barCount}>{d.count > 0 ? d.count : ''}</span>
+                    <div
+                      className={`${s.bar} ${isBest ? s.barBest : ''}`}
+                      style={{ height: `${barH}px` }}
+                    />
+                    <span className={`${s.barDay} ${isBest ? s.barDayBest : ''}`}>{d.weekday}</span>
+                  </div>
+                )
+              })}
+            </div>
+            {report.best_day.count > 0 && (
+              <p className={s.weeklyBestDay}>
+                <i className="fa-solid fa-star" aria-hidden />{' '}
+                лучший день — <strong>{report.best_day.weekday}</strong>{' '}
+                ({report.best_day.count} {pluralTasks(report.best_day.count)})
+              </p>
+            )}
+          </div>
+
+          {/* ── AI-нарратив ── */}
+          {report.ai_narrative ? (
+            <blockquote className={s.weeklyNarrative}>
+              <span className={s.weeklyNarrativeQuote} aria-hidden>"</span>
+              {report.ai_narrative}
+            </blockquote>
+          ) : null}
+
+          {/* ── Предстоящие события ── */}
+          {report.upcoming_events && report.upcoming_events.length > 0 && (
+            <div className={s.weeklyUpcoming}>
+              <p className={s.weeklyUpcomingTitle}>
+                <i className="fa-regular fa-calendar" aria-hidden /> Следующая неделя
+              </p>
+              <ul className={s.weeklyUpcomingList}>
+                {report.upcoming_events.map((ev) => (
+                  <li key={ev.id ?? ev.start} className={s.weeklyUpcomingItem}>
+                    <span className={s.weeklyUpcomingTime}>{formatEventStart(ev.start)}</span>
+                    <span className={s.weeklyUpcomingEvTitle}>{ev.title}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* ── Подсказка если Google не подключён ── */}
+          {!report.google_linked && (
+            <p className={s.weeklyNoGoogle}>
+              <i className="fa-regular fa-calendar-xmark" aria-hidden />{' '}
+              Подключите Google Calendar в профиле — отчёт покажет события следующей недели.
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function pluralTasks(n: number): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod100 >= 11 && mod100 <= 14) return 'задач'
+  if (mod10 === 1) return 'задача'
+  if (mod10 >= 2 && mod10 <= 4) return 'задачи'
+  return 'задач'
 }
