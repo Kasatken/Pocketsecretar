@@ -6,7 +6,7 @@
   border-radius: 999px;
   border: 1.5px solid var(--text, #1a2744);
   overflow: hidden;
-  background: linear-gradient(145deg, rgba(201, 162, 39, 0.2), rgba(255, 255, 255, 0.9));
+  background: linear-gradient(145deg, rgba(24, 138, 0, 0.2), rgba(255, 255, 255, 0.9));
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
 }
 

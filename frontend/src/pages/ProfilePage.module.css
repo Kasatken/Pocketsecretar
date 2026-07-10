@@ -11,9 +11,9 @@
   --border: #e5e2de;
   --royal: #1a2744;
   --royal-soft: rgba(26, 39, 68, 0.08);
-  --gold: #c9a227;
-  --gold-dark: #8f7319;
-  --gold-line: rgba(201, 162, 39, 0.42);
+  --gold: #188a00;
+  --gold-dark: #0d6b00;
+  --gold-line: rgba(26, 39, 68, 0.2);
   --s1: 0.382rem;
   --s2: 0.618rem;
   --s3: 1rem;
@@ -1131,7 +1131,7 @@
 }
 .modalPanel {
   --m-royal-soft: rgba(26, 39, 68, 0.08);
-  --m-gold-line: rgba(201, 162, 39, 0.42);
+  --m-gold-line: rgba(26, 39, 68, 0.2);
   --m-bg: #e5f5ec;
   position: relative;
   width: 100%;
@@ -1150,8 +1150,8 @@
   pointer-events: none;
   z-index: 2;
 }
-.modalPanel::before { top: 10px; left: 10px; border-top: 2px solid #c9a227; border-left: 2px solid #c9a227; }
-.modalPanel::after  { bottom: 10px; right: 10px; border-bottom: 2px solid #c9a227; border-right: 2px solid #c9a227; }
+.modalPanel::before { top: 10px; left: 10px; border-top: 2px solid #188a00; border-left: 2px solid #188a00; }
+.modalPanel::after  { bottom: 10px; right: 10px; border-bottom: 2px solid #188a00; border-right: 2px solid #188a00; }
 .modalHeader {
   display: flex;
   align-items: flex-start;

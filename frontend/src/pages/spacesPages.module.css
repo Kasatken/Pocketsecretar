@@ -255,7 +255,7 @@
   border: 2px solid var(--text);
   border-radius: 6px;
   background:
-    linear-gradient(180deg, rgba(201, 162, 39, 0.06) 0%, transparent 45%),
+    linear-gradient(180deg, rgba(24, 138, 0, 0.06) 0%, transparent 45%),
     var(--card);
   box-shadow: 1px 1px 0 0 var(--gold-dark);
 }
@@ -385,7 +385,7 @@
 
 .pillPending {
   composes: pill;
-  background: rgba(201, 162, 39, 0.18);
+  background: rgba(24, 138, 0, 0.18);
   color: var(--royal);
 }
 
@@ -449,7 +449,7 @@
   font-size: 0.95rem;
   line-height: 1;
   color: var(--royal);
-  background: linear-gradient(145deg, rgba(201, 162, 39, 0.2) 0%, var(--gbg) 100%);
+  background: linear-gradient(145deg, rgba(24, 138, 0, 0.2) 0%, var(--gbg) 100%);
   border: 1.5px solid var(--gold-dark);
   border-radius: 999px;
   cursor: pointer;
@@ -482,7 +482,7 @@
 }
 .modalPanel {
   --m-royal-soft: rgba(26, 39, 68, 0.08);
-  --m-gold-line: rgba(201, 162, 39, 0.42);
+  --m-gold-line: rgba(26, 39, 68, 0.2);
   --m-bg: #e5f5ec;
   position: relative;
   width: 100%;
@@ -501,8 +501,8 @@
   pointer-events: none;
   z-index: 2;
 }
-.modalPanel::before { top: 10px; left: 10px; border-top: 2px solid #c9a227; border-left: 2px solid #c9a227; }
-.modalPanel::after  { bottom: 10px; right: 10px; border-bottom: 2px solid #c9a227; border-right: 2px solid #c9a227; }
+.modalPanel::before { top: 10px; left: 10px; border-top: 2px solid #188a00; border-left: 2px solid #188a00; }
+.modalPanel::after  { bottom: 10px; right: 10px; border-bottom: 2px solid #188a00; border-right: 2px solid #188a00; }
 .modalHeader {
   display: flex;
   align-items: flex-start;
@@ -512,7 +512,7 @@
   border-bottom: 2px solid var(--text);
   background:
     linear-gradient(155deg, var(--m-royal-soft) 0%, transparent 52%),
-    linear-gradient(180deg, rgba(201, 162, 39, 0.12) 0%, transparent 42%),
+    linear-gradient(180deg, rgba(24, 138, 0, 0.12) 0%, transparent 42%),
     var(--m-bg);
 }
 .modalTitle {
@@ -564,7 +564,7 @@
   justify-content: center;
   border-radius: 8px;
   border: 2px solid var(--text);
-  background: linear-gradient(145deg, rgba(201, 162, 39, 0.2) 0%, var(--gbg) 100%);
+  background: linear-gradient(145deg, rgba(24, 138, 0, 0.2) 0%, var(--gbg) 100%);
   color: var(--royal);
   font-size: 0.85rem;
   box-shadow: 2px 2px 0 0 var(--gold-dark);
