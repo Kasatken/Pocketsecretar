@@ -1216,12 +1216,14 @@
     display: contents;
   }
 
-  /* Порядок на мобильном: герой → задачи → дальше → помодоро+AI → ход дня */
-  .hero       { order: 1; }
-  .todayRight { order: 2; }
-  .nextStrip  { order: 3; }
-  .leftMidRow { order: 4; }
-  .dayGauge   { order: 5; }
+  /* Порядок на мобильном: герой → задачи → дальше → помодоро+AI → ход дня.
+     Привязано к .todayLayout, чтобы правило не «утекало» на другие страницы
+     (например «Пространства»), где .hero живёт в общем .shell. */
+  .todayLayout .hero       { order: 1; }
+  .todayLayout .todayRight { order: 2; }
+  .todayLayout .nextStrip  { order: 3; }
+  .todayLayout .leftMidRow { order: 4; }
+  .todayLayout .dayGauge   { order: 5; }
 
   .todayRight {
     min-height: 0;
