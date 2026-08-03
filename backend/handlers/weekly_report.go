@@ -15,8 +15,6 @@ import (
 	"pocketsecret/repository"
 )
 
-const weeklyReportTZ = "Europe/Moscow"
-
 // weekdayShortRu: индекс = time.Weekday (0=Вс, 1=Пн, … 6=Сб).
 var weekdayShortRu = [...]string{"вс", "пн", "вт", "ср", "чт", "пт", "сб"}
 
@@ -77,11 +75,19 @@ func (h *WeeklyReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 
-	// ── Границы текущей недели (пн 00:00 … вс 23:59, Europe/Moscow) ──────────
-	loc, err := time.LoadLocation(weeklyReportTZ)
-	if err != nil {
-		loc = time.UTC
+	// ── Профиль пользователя (таймзона недели и имя для промпта) ─────────────
+	user, err := h.users.FindByID(ctx, userID)
+	if err != nil || user == nil {
+		http.Error(w, "user not found", http.StatusInternalServerError)
+		return
 	}
+	displayName := strings.TrimSpace(user.DisplayName)
+	if displayName == "" {
+		displayName = "пользователь"
+	}
+
+	// ── Границы текущей недели (пн 00:00 … вс 23:59 в таймзоне пользователя) ─
+	loc, tzName := userLocation(user)
 	now := time.Now().In(loc)
 	wd := int(now.Weekday()) // 0 = Воскресенье
 	if wd == 0 {
@@ -102,7 +108,7 @@ func (h *WeeklyReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// ── Выполненные задачи по дням текущей недели ────────────────────────────
-	dayCompletions, err := h.weeklyRepo.CompletionsByDay(ctx, userID, monday, nextMonday)
+	dayCompletions, err := h.weeklyRepo.CompletionsByDay(ctx, userID, monday, nextMonday, tzName)
 	if err != nil {
 		log.Printf("weekly-report completions by day: %v", err)
 		dayCompletions = nil
@@ -147,20 +153,9 @@ func (h *WeeklyReportHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// ── Стрик ─────────────────────────────────────────────────────────────────
-	compStats, err := h.completions.GetStats(ctx, userID)
+	compStats, err := h.completions.GetStats(ctx, userID, user.Timezone)
 	if err != nil {
 		log.Printf("weekly-report comp stats: %v", err)
-	}
-
-	// ── Профиль пользователя (имя для промпта) ────────────────────────────────
-	user, err := h.users.FindByID(ctx, userID)
-	if err != nil || user == nil {
-		http.Error(w, "user not found", http.StatusInternalServerError)
-		return
-	}
-	displayName := strings.TrimSpace(user.DisplayName)
-	if displayName == "" {
-		displayName = "пользователь"
 	}
 
 	// ── Google Calendar: события следующей недели (опционально) ──────────────

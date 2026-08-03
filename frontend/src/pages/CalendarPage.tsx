@@ -45,6 +45,7 @@ import {
   type SmartTaskPreset,
 } from '../lib/smartTaskPresets'
 import { formatQuotaResetsAtHint, parseSmartTasksToday } from '../lib/smartTaskQuota'
+import { useCompletionBurst } from '../components/CompletionBurst'
 import s from './CalendarPage.module.css'
 
 function smartTaskUserMessage(err: unknown): string {
@@ -155,6 +156,7 @@ function breakMinutes(ev: NormalizedEvent): number {
 export default function CalendarPage() {
   const navigate = useNavigate()
   const { accessToken, refreshSession, ready, user } = useAuth()
+  const { burstNode, celebrate } = useCompletionBurst()
   const [view, setView] = useState<'month' | 'week'>('month')
   const [anchor, setAnchor] = useState(() => new Date())
   const [events, setEvents] = useState<NormalizedEvent[]>([])
@@ -559,9 +561,11 @@ export default function CalendarPage() {
     if (isSpaceProposalGhostEvent(ev)) return
     setCompletingEventId(ev.id)
     setDeleteEventError(null)
+    const prevUser = user
     try {
-      await completeCalendarEvent(accessToken, ev.id)
+      const res = await completeCalendarEvent(accessToken, ev.id)
       markEventCompletedInState(ev.id)
+      if (!res.already_completed) celebrate(prevUser, res.user)
       await refreshSession()
     } catch (err) {
       if (err instanceof Error && err.message === '401') {
@@ -571,8 +575,9 @@ export default function CalendarPage() {
           return
         }
         try {
-          await completeCalendarEvent(newToken, ev.id)
+          const res = await completeCalendarEvent(newToken, ev.id)
           markEventCompletedInState(ev.id)
+          if (!res.already_completed) celebrate(prevUser, res.user)
           await refreshSession()
         } catch (retryErr) {
           setDeleteEventError(retryErr instanceof Error ? retryErr.message : 'Не удалось отметить выполненным')
@@ -1018,6 +1023,7 @@ export default function CalendarPage() {
       {dayModalUi}
       {smartModalUi}
       {presetsModalUi}
+      {burstNode}
       <div className={s.page}>
       <div className={s.shell}>
         <div className={s.mainColumn}>

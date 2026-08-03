@@ -12,10 +12,26 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"pocketsecret/config"
 )
+
+// openRouterClientOnce/openRouterClient — один клиент на процесс: сохраняет пул keep-alive
+// соединений между вызовами (иначе каждый LLM-запрос платит новый TLS-handshake, особенно через прокси).
+// Прокси берётся из конфига один раз — он не меняется за время жизни процесса.
+var (
+	openRouterClientOnce sync.Once
+	openRouterClient     *http.Client
+)
+
+func openRouterHTTPClient(proxyURL string) *http.Client {
+	openRouterClientOnce.Do(func() {
+		openRouterClient = newOpenRouterHTTPClient(proxyURL)
+	})
+	return openRouterClient
+}
 
 // newOpenRouterHTTPClient returns a client for OpenRouter; if proxyURL is non-empty (http/https/socks5),
 // all requests use that proxy; otherwise the default transport (incl. HTTP(S)_PROXY from environment).
@@ -66,7 +82,7 @@ func OpenRouterChat(ctx context.Context, cfg config.Config, apiKey, model string
 	req.Header.Set("HTTP-Referer", ref)
 	req.Header.Set("X-Title", "PocketSecret")
 
-	client := newOpenRouterHTTPClient(cfg.OpenRouterProxy)
+	client := openRouterHTTPClient(cfg.OpenRouterProxy)
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err

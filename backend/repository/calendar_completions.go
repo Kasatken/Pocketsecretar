@@ -3,9 +3,12 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
+
+	"pocketsecret/config"
 )
 
 type CompletionStats struct {
@@ -68,8 +71,21 @@ func (r *CalendarCompletionRepository) CompletedEventIDs(ctx context.Context, us
 	return out, rows.Err()
 }
 
-// GetStats returns completion stats for the user.
-func (r *CalendarCompletionRepository) GetStats(ctx context.Context, userID int64) (CompletionStats, error) {
+// GetStats returns completion stats for the user. tz — IANA-таймзона пользователя
+// (границы дня для стрика); пустая или неизвестная — таймзона приложения.
+func (r *CalendarCompletionRepository) GetStats(ctx context.Context, userID int64, tz string) (CompletionStats, error) {
+	tzName := strings.TrimSpace(tz)
+	loc := config.AppLocation()
+	if tzName != "" {
+		if l, err := time.LoadLocation(tzName); err == nil {
+			loc = l
+		} else {
+			tzName = config.AppTimeZone
+		}
+	} else {
+		tzName = config.AppTimeZone
+	}
+
 	var total, week int
 	if err := r.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM calendar_event_completions WHERE user_id = $1`,
@@ -85,11 +101,11 @@ func (r *CalendarCompletionRepository) GetStats(ctx context.Context, userID int6
 	}
 
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT DISTINCT DATE(completed_at AT TIME ZONE 'Europe/Moscow')
+		`SELECT DISTINCT DATE(completed_at AT TIME ZONE $2::text)
 		 FROM calendar_event_completions
 		 WHERE user_id = $1 AND completed_at >= NOW() - INTERVAL '365 days'
 		 ORDER BY 1 DESC`,
-		userID,
+		userID, tzName,
 	)
 	if err != nil {
 		return CompletionStats{}, err
@@ -111,17 +127,13 @@ func (r *CalendarCompletionRepository) GetStats(ctx context.Context, userID int6
 	return CompletionStats{
 		CompletedWeek:  week,
 		TotalCompleted: total,
-		Streak:         calcCompletionStreak(days),
+		Streak:         calcCompletionStreak(days, loc),
 	}, nil
 }
 
-func calcCompletionStreak(days []time.Time) int {
+func calcCompletionStreak(days []time.Time, loc *time.Location) int {
 	if len(days) == 0 {
 		return 0
-	}
-	loc, err := time.LoadLocation("Europe/Moscow")
-	if err != nil {
-		loc = time.UTC
 	}
 	now := time.Now().In(loc)
 	todayUTC := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)

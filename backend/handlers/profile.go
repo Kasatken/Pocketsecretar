@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"pocketsecret/middleware"
@@ -22,6 +23,7 @@ type patchProfileBody struct {
 	Bio                  *string `json:"bio"`
 	PersonalizationNote  *string `json:"personalization_note"`
 	Chronotype           *string `json:"chronotype"`
+	Timezone             *string `json:"timezone"`
 }
 
 type redeemPromoBody struct {
@@ -141,7 +143,12 @@ func (h *AuthHandler) MeStats(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	compStats, err := h.completions.GetStats(r.Context(), userID)
+	statsUser, err := h.users.FindByID(r.Context(), userID)
+	if err != nil || statsUser == nil {
+		http.Error(w, "failed to fetch stats", http.StatusInternalServerError)
+		return
+	}
+	compStats, err := h.completions.GetStats(r.Context(), userID, statsUser.Timezone)
 	if err != nil {
 		http.Error(w, "failed to fetch stats", http.StatusInternalServerError)
 		return
@@ -204,7 +211,7 @@ func (h *AuthHandler) patchProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if body.DisplayName == nil && body.Bio == nil && body.PersonalizationNote == nil && body.Chronotype == nil {
+	if body.DisplayName == nil && body.Bio == nil && body.PersonalizationNote == nil && body.Chronotype == nil && body.Timezone == nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"user": h.userJSONForResponse(r.Context(), userID, user),
 		})
@@ -239,6 +246,18 @@ func (h *AuthHandler) patchProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		user.Chronotype = c
+	}
+	if body.Timezone != nil {
+		tz := strings.TrimSpace(*body.Timezone)
+		if tz == "" || len(tz) > 64 {
+			http.Error(w, "invalid timezone", http.StatusBadRequest)
+			return
+		}
+		if _, err := time.LoadLocation(tz); err != nil {
+			http.Error(w, "invalid timezone", http.StatusBadRequest)
+			return
+		}
+		user.Timezone = tz
 	}
 
 	if err := h.users.UpdateProfile(r.Context(), user); err != nil {

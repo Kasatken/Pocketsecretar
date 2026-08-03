@@ -9,6 +9,23 @@ import (
 	"time"
 )
 
+// AppTimeZone — единая таймзона приложения (планировщик, советы, стрик, отчёты).
+// До появления пользовательской таймзоны — единственный источник правды вместо
+// разбросанных литералов "Europe/Moscow".
+const AppTimeZone = "Europe/Moscow"
+
+var appLocation = func() *time.Location {
+	loc, err := time.LoadLocation(AppTimeZone)
+	if err != nil {
+		log.Printf("WARNING: таймзона %s недоступна (%v) — используется UTC", AppTimeZone, err)
+		return time.UTC
+	}
+	return loc
+}()
+
+// AppLocation возвращает *time.Location для AppTimeZone (UTC как fallback, если tzdata недоступна).
+func AppLocation() *time.Location { return appLocation }
+
 type Config struct {
 	Port             string
 	DatabaseURL      string

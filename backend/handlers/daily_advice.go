@@ -17,10 +17,10 @@ import (
 
 	"pocketsecret/config"
 	"pocketsecret/middleware"
+	"pocketsecret/models"
 	"pocketsecret/repository"
 )
 
-const dailyAdviceTZ = "Europe/Moscow"
 const dailyAdviceHorizonDays = 6
 
 const dailyAdviceSystem = `Ты — лаконичный и внимательный коуч по продуктивности для русскообразного пользователя приложения-календаря.
@@ -138,14 +138,22 @@ func (h *DailyAdviceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Пользователь нужен трижды (лимит refresh, таймзона, персонализация) — грузим один раз.
+	var adviceUser *models.User
+	if h.users != nil {
+		if u, e := h.users.FindByID(r.Context(), userID); e == nil {
+			adviceUser = u
+		} else {
+			log.Printf("daily-advice user load: %v", e)
+		}
+	}
+
 	refresh := r.URL.Query().Get("refresh") == "1" || strings.EqualFold(r.URL.Query().Get("refresh"), "true")
 
 	if refresh {
 		plan := ""
-		if h.users != nil {
-			if u, e := h.users.FindByID(r.Context(), userID); e == nil && u != nil {
-				plan = u.Plan
-			}
+		if adviceUser != nil {
+			plan = adviceUser.Plan
 		}
 		hourLimit := h.cfg.FreeAdviceRefreshPerHour
 		if hourLimit <= 0 {
@@ -175,10 +183,7 @@ func (h *DailyAdviceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	loc, err := time.LoadLocation(dailyAdviceTZ)
-	if err != nil {
-		loc = time.UTC
-	}
+	loc, tzName := userLocation(adviceUser)
 	now := time.Now().In(loc)
 	dayStr := now.Format("2006-01-02")
 
@@ -235,33 +240,29 @@ func (h *DailyAdviceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	scheduleText := formatScheduleForAdvice(events, loc)
 	displayName := "пользователь"
 	var coachCtx strings.Builder
-	if h.users != nil {
-		if u, err := h.users.FindByID(ctx, userID); err == nil && u != nil {
-			personaHash := sha256.Sum256([]byte(
-				strings.TrimSpace(u.Bio) + "\n" +
-					strings.TrimSpace(u.PersonalizationNote) + "\n" +
-					strings.TrimSpace(u.Chronotype),
-			))
-			sig += "|p:" + hex.EncodeToString(personaHash[:8])
-			if n := strings.TrimSpace(u.DisplayName); n != "" {
-				displayName = n
+	if u := adviceUser; u != nil {
+		personaHash := sha256.Sum256([]byte(
+			strings.TrimSpace(u.Bio) + "\n" +
+				strings.TrimSpace(u.PersonalizationNote) + "\n" +
+				strings.TrimSpace(u.Chronotype),
+		))
+		sig += "|p:" + hex.EncodeToString(personaHash[:8])
+		if n := strings.TrimSpace(u.DisplayName); n != "" {
+			displayName = n
+		}
+		if b := strings.TrimSpace(u.Bio); b != "" {
+			coachCtx.WriteString("\nПрофиль (раздел «о себе»): ")
+			coachCtx.WriteString(b)
+		}
+		if p := strings.TrimSpace(u.PersonalizationNote); p != "" {
+			coachCtx.WriteString("\nКраткая персонализация: ")
+			coachCtx.WriteString(p)
+		}
+		if c := strings.TrimSpace(u.Chronotype); c != "" {
+			if line := ChronotypePlannerRu(c); line != "" {
+				coachCtx.WriteString("\nБиоритмы: ")
+				coachCtx.WriteString(line)
 			}
-			if b := strings.TrimSpace(u.Bio); b != "" {
-				coachCtx.WriteString("\nПрофиль (раздел «о себе»): ")
-				coachCtx.WriteString(b)
-			}
-			if p := strings.TrimSpace(u.PersonalizationNote); p != "" {
-				coachCtx.WriteString("\nКраткая персонализация: ")
-				coachCtx.WriteString(p)
-			}
-			if c := strings.TrimSpace(u.Chronotype); c != "" {
-				if line := ChronotypePlannerRu(c); line != "" {
-					coachCtx.WriteString("\nБиоритмы: ")
-					coachCtx.WriteString(line)
-				}
-			}
-		} else if err != nil {
-			log.Printf("daily-advice user load: %v", err)
 		}
 	}
 
@@ -290,7 +291,7 @@ func (h *DailyAdviceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	userMsg := fmt.Sprintf(
 		"Часовой пояс для интерпретации дат: %s\nТекущие дата и время: %s (%s)\nИмя (для обращения): %s%s\n\nСобытия календаря на сегодня и ближайшие %d дней:\n%s",
-		dailyAdviceTZ,
+		tzName,
 		now.Format("2006-01-02 15:04"),
 		weekdayRu(now.Weekday()),
 		displayName,

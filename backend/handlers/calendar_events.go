@@ -633,7 +633,7 @@ func createGoogleCalendarAllDayEvent(ctx context.Context, httpClient *http.Clien
 	return out.ID, nil
 }
 
-const defaultBacklogEventTZ = "Europe/Moscow"
+const defaultBacklogEventTZ = config.AppTimeZone
 
 // createGoogleCalendarTimedEvent creates a timed event (wall clock in timeZone). startHM/endHM are "HH:MM". If endHM is empty, end is start + 1 hour.
 func createGoogleCalendarTimedEvent(ctx context.Context, httpClient *http.Client, summary, dateISO, startHM, endHM, colorID, description, timeZone string) (string, error) {

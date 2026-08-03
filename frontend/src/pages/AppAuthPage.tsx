@@ -1,12 +1,14 @@
 import { FormEvent, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { safeInternalPath } from '../lib/safePath'
 import SiteFooter from '../components/SiteFooter'
 import { APP_NAME, LOGO_URL } from '../lib/branding'
 import s from './AppAuth.module.css'
 
 export default function AppAuthPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { login, register } = useAuth()
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [displayName, setDisplayName] = useState('')
@@ -31,7 +33,9 @@ export default function AppAuthPage() {
       } else {
         await register(email, password, displayName)
       }
-      navigate('/app', { replace: true })
+      // Если пришли по ссылке-приглашению (/spaces?token=…) — возвращаем туда, а не на /app.
+      const from = safeInternalPath((location.state as { from?: string } | null)?.from)
+      navigate(from ?? '/app', { replace: true })
     } catch (authError) {
       const message = authError instanceof Error ? authError.message : 'Ошибка авторизации'
       setError(message)

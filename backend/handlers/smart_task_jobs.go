@@ -2,15 +2,12 @@ package handlers
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -19,93 +16,31 @@ import (
 	"pocketsecret/repository"
 )
 
-// smartTaskJobStore держит результат асинхронного smart-task (POST возвращает job_id сразу).
-type smartTaskJobStore struct {
-	mu sync.Mutex
-	m  map[string]*smartTaskJobState
-}
+// Обёртки над repository.SmartTaskJobRepository для фоновой горутины:
+// свой короткий контекст (не привязанный к workCtx, который к этому моменту мог истечь) и логирование ошибок записи.
 
-type smartTaskJobState struct {
-	Status string // pending, running, done, error
-	UserID int64
-
-	Result map[string]interface{} // при status=done — тот же JSON, что раньше отдавал синхронный POST
-
-	ErrHTTP int                    // при status=error
-	ErrBody map[string]interface{} // тело для клиента (detail, error, smart_tasks_today, …)
-}
-
-func newSmartTaskJobStore() *smartTaskJobStore {
-	return &smartTaskJobStore{m: make(map[string]*smartTaskJobState)}
-}
-
-func newSmartJobID() string {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return fmt.Sprintf("j%d", time.Now().UnixNano())
-	}
-	return hex.EncodeToString(b)
-}
-
-func (s *smartTaskJobStore) start(id string, userID int64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.m[id] = &smartTaskJobState{Status: "pending", UserID: userID}
-}
-
-func (s *smartTaskJobStore) markRunning(id string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if j, ok := s.m[id]; ok {
-		j.Status = "running"
+func (h *SmartTaskHandler) jobMarkRunning(jobID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := h.jobs.MarkRunning(ctx, jobID); err != nil {
+		log.Printf("smart-task job mark running: %v", err)
 	}
 }
 
-func (s *smartTaskJobStore) finishOK(id string, result map[string]interface{}) {
-	s.mu.Lock()
-	j, ok := s.m[id]
-	if !ok {
-		s.mu.Unlock()
-		return
+func (h *SmartTaskHandler) jobFinishOK(jobID string, result map[string]interface{}) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := h.jobs.Finish(ctx, jobID, result); err != nil {
+		log.Printf("smart-task job finish: %v", err)
 	}
-	j.Status = "done"
-	j.Result = result
-	s.mu.Unlock()
-	go func() {
-		time.Sleep(15 * time.Minute)
-		s.mu.Lock()
-		delete(s.m, id)
-		s.mu.Unlock()
-	}()
 }
 
-func (s *smartTaskJobStore) finishErr(id string, httpCode int, body map[string]interface{}) {
-	s.mu.Lock()
-	j, ok := s.m[id]
-	if !ok {
-		s.mu.Unlock()
-		return
+func (h *SmartTaskHandler) jobFinishErr(jobID string, httpCode int, body map[string]interface{}) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := h.jobs.Fail(ctx, jobID, httpCode, body); err != nil {
+		log.Printf("smart-task job fail: %v", err)
 	}
-	j.Status = "error"
-	j.ErrHTTP = httpCode
-	j.ErrBody = body
-	s.mu.Unlock()
-	go func() {
-		time.Sleep(15 * time.Minute)
-		s.mu.Lock()
-		delete(s.m, id)
-		s.mu.Unlock()
-	}()
-}
-
-func (s *smartTaskJobStore) getForUser(jobID string, userID int64) (st *smartTaskJobState, ok bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	j, found := s.m[jobID]
-	if !found || j.UserID != userID {
-		return nil, false
-	}
-	return j, true
 }
 
 // executeSmartTaskSync выполняет OpenRouter + Google. ctx не должен быть привязан к HTTP-запросу клиента.
@@ -122,6 +57,8 @@ func (h *SmartTaskHandler) executeSmartTaskSync(
 	apiKey string,
 	model string,
 	maxTok int,
+	loc *time.Location,
+	tzName string,
 ) (okBody map[string]interface{}, errHTTP int, errBody map[string]interface{}) {
 	tLLM := time.Now()
 	content, err := OpenRouterChat(ctx, h.cfg, apiKey, model, maxTok, 0.3, smartTaskSystem, userMsg)
@@ -166,7 +103,7 @@ func (h *SmartTaskHandler) executeSmartTaskSync(
 
 	tasks := make([]aiTaskRaw, 0, len(rawTasks))
 	for i, one := range rawTasks {
-		tasks = append(tasks, normalizeTask(one, text, todayStr, i))
+		tasks = append(tasks, normalizeTask(one, text, todayStr, i, loc))
 	}
 	tasks = capBreakTasksPerDay(tasks, 2)
 
@@ -212,7 +149,7 @@ func (h *SmartTaskHandler) executeSmartTaskSync(
 	eventIDs := make([]*string, len(tasks))
 	calendarFailed := 0
 	for i := range tasks {
-		id, err := createGoogleCalendarEvent(googleCtx, httpClient, &tasks[i], "Europe/Moscow")
+		id, err := createGoogleCalendarEvent(googleCtx, httpClient, &tasks[i], tzName)
 		if err != nil {
 			log.Printf("create calendar event: %v", err)
 			eventIDs[i] = nil
@@ -220,6 +157,27 @@ func (h *SmartTaskHandler) executeSmartTaskSync(
 			continue
 		}
 		eventIDs[i] = &id
+	}
+
+	// Квота списана до создания событий; за задачи, не попавшие в календарь, возвращаем её —
+	// иначе пользователь теряет дневной лимит и не получает ничего.
+	nonBreakFailed := 0
+	for i := range tasks {
+		if eventIDs[i] == nil && !isBreakTask(&tasks[i]) {
+			nonBreakFailed++
+		}
+	}
+	if nonBreakFailed > 0 {
+		if err := h.quota.Decrement(dbCtx, userID, quotaDay, nonBreakFailed); err != nil {
+			log.Printf("smart-task quota refund: %v", err)
+		}
+	}
+	if len(tasks) > 0 && calendarFailed == len(tasks) {
+		used, _ := h.quota.CountForDay(dbCtx, userID, quotaDay)
+		return nil, http.StatusBadGateway, map[string]interface{}{
+			"detail":            "Не удалось добавить события в Google Календарь. Лимит не потрачен — попробуйте ещё раз.",
+			"smart_tasks_today": smartTasksQuotaPayload(used, limit),
+		}
 	}
 
 	out := map[string]interface{}{
@@ -257,8 +215,13 @@ func (h *SmartTaskHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		st, found := h.jobs.getForUser(job, userID)
-		if !found {
+		st, err := h.jobs.GetForUser(r.Context(), job, userID)
+		if err != nil {
+			log.Printf("smart-task job get: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"detail": "Не удалось получить статус задачи"})
+			return
+		}
+		if st == nil {
 			writeJSON(w, http.StatusNotFound, map[string]string{"detail": "Задача не найдена или устарела"})
 			return
 		}
@@ -273,7 +236,8 @@ func (h *SmartTaskHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				out[k] = v
 			}
 			writeJSON(w, http.StatusOK, out)
-		case "error":
+		case "failed":
+			// В БД статус называется failed; клиенту отдаём прежний "error" с тем же телом.
 			resp := map[string]interface{}{"ok": false, "status": "error", "http_status": st.ErrHTTP}
 			for k, v := range st.ErrBody {
 				resp[k] = v
@@ -376,26 +340,33 @@ func (h *SmartTaskHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		maxTok = 2048
 	}
 
-	jobID := newSmartJobID()
-	h.jobs.start(jobID, userID)
+	jobID, err := h.jobs.Start(r.Context(), userID)
+	if err != nil {
+		log.Printf("smart-task job start: %v", err)
+		http.Error(w, "job store error", http.StatusInternalServerError)
+		return
+	}
 
 	plan := user.Plan
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
 				log.Printf("smart-task job panic: %v", rec)
-				h.jobs.finishErr(jobID, http.StatusInternalServerError, map[string]interface{}{
+				h.jobFinishErr(jobID, http.StatusInternalServerError, map[string]interface{}{
 					"detail": "Внутренняя ошибка сервера",
 				})
 			}
 		}()
-		h.jobs.markRunning(jobID)
+		h.llmSlots <- struct{}{}
+		defer func() { <-h.llmSlots }()
+		h.jobMarkRunning(jobID)
 		workCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 
 		t0 := time.Now()
+		userLoc, tzName := userLocation(user)
 		// Строим контекст для AI здесь, чтобы HTTP 202 вернулся немедленно
-		busyText := h.buildBusySlotsText(workCtx, userID, todayStr, refresh)
+		busyText := h.buildBusySlotsText(workCtx, todayStr, refresh, userLoc)
 		log.Printf("[smart-task timing] google_calendar_fetch=%dms", time.Since(t0).Milliseconds())
 		profileCtx := ""
 		if strings.TrimSpace(user.DisplayName) != "" || strings.TrimSpace(user.Bio) != "" {
@@ -413,14 +384,11 @@ func (h *SmartTaskHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			profileCtx += " Соблюдай персонализацию как занятость: не ставь новые задачи на пересечение с указанными днями/часами (буфер 10 мин), даже если этого слота нет в списке из Google Calendar."
 		}
-		msgLoc, msgTzErr := time.LoadLocation("Europe/Moscow")
-		if msgTzErr != nil {
-			msgLoc = time.UTC
-		}
-		nowLocal := time.Now().In(msgLoc)
+		nowLocal := time.Now().In(userLoc)
 		datetimeStr := nowLocal.Format("2006-01-02 15:04")
 		userMsg := fmt.Sprintf(
-			"Текущие дата и время (Europe/Moscow): %s\nОриентир «сегодня» из приложения: %s.%s\n\nЗапрос пользователя:\n%s",
+			"Текущие дата и время (%s): %s\nОриентир «сегодня» из приложения: %s.%s\n\nЗапрос пользователя:\n%s",
+			tzName,
 			datetimeStr,
 			todayStr,
 			profileCtx,
@@ -444,14 +412,16 @@ func (h *SmartTaskHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			apiKey,
 			model,
 			maxTok,
+			userLoc,
+			tzName,
 		)
 		log.Printf("[smart-task timing] ai_and_gcal_create=%dms total=%dms model=%s",
 			time.Since(tAI).Milliseconds(), time.Since(t0).Milliseconds(), model)
 		if errBody != nil {
-			h.jobs.finishErr(jobID, errHTTP, errBody)
+			h.jobFinishErr(jobID, errHTTP, errBody)
 			return
 		}
-		h.jobs.finishOK(jobID, okBody)
+		h.jobFinishOK(jobID, okBody)
 	}()
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{

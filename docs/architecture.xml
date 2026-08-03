@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<architecture name="PocketSecret" description="AI-планировщик с геймификацией" updated="2026-07-12">
+
+  <client name="React SPA" tech="React 18 + TypeScript + Vite" path="frontend/src">
+    <module name="pages" role="Экраны: календарь, профиль, пространства, лендинг"/>
+    <module name="lib" role="API-клиенты (fetch) и чистая логика без React"/>
+    <module name="auth" role="Access-токен в памяти, refresh — в httpOnly cookie"/>
+    <note>Умная задача: POST → 202 + job_id → опрос GET ?job= каждые 500 мс (максимум 2 минуты)</note>
+  </client>
+
+  <backend tech="Go 1.22, стандартный net/http, без фреймворков" entry="backend/main.go">
+    <layer name="middleware" path="backend/middleware">
+      <component name="RequireAuth" role="JWT из заголовка → userID в context запроса"/>
+      <component name="CORS"/>
+      <component name="RateLimiter" role="in-memory, по IP (логин, регистрация, промокод)"/>
+    </layer>
+
+    <layer name="handlers" path="backend/handlers"
+           role="HTTP-обработчики + бизнес-логика + клиенты Google/OpenRouter + LLM-промпты">
+      <component name="AuthHandler" file="auth.go" uses="users, smart_tasks, calendar_completions"/>
+      <component name="SmartTaskHandler" file="smart_task.go, smart_task_jobs.go"
+                 uses="google_calendar, smart_tasks, users, smart_task_jobs"
+                 external="OpenRouter, Google Calendar">
+        <detail>Асинхронный (202): фоновая горутина под семафором (максимум 8 одновременно), статус job — в Postgres</detail>
+      </component>
+      <component name="CalendarEventsHandler" file="calendar_events.go"
+                 uses="google_calendar, users, calendar_completions" external="Google Calendar">
+        <detail>Здесь же живёт общий HTTP-клиент Google Calendar (fetch/create/patch/delete) — используется всеми фичами</detail>
+      </component>
+      <component name="DailyAdviceHandler" file="daily_advice.go" uses="google_calendar, users, daily_advice"
+                 external="OpenRouter, Google Calendar">
+        <detail>Синхронный LLM в запросе (до 120 с); кэш совета на день с сигнатурой расписания</detail>
+      </component>
+      <component name="WeeklyReportHandler" file="weekly_report.go"
+                 uses="users, google_calendar, calendar_completions, smart_tasks, weekly_report"
+                 external="OpenRouter, Google Calendar"/>
+      <component name="BacklogIdeasHandler" file="backlog_ideas.go" uses="google_calendar, backlog_ideas"/>
+      <component name="CollabHandler" file="collab_spaces.go" uses="google_calendar, users, collab_spaces"
+                 role="Пространства: приглашения, предложения задач, оверлеи в календаре"/>
+      <component name="GoogleOAuthHandler" file="google.go" role="OAuth-подключение календаря"/>
+      <component name="OpenRouterChat" file="openrouter.go"
+                 role="Общий LLM-клиент: один http.Client на процесс, ретраи на 429/5xx, опциональный прокси"/>
+    </layer>
+
+    <layer name="repository" path="backend/repository" role="Весь SQL. Один файл — одна таблица/домен. HTTP не знает">
+      <component name="users" role="аккаунт, XP, уровень, тариф"/>
+      <component name="google_calendar" role="refresh-токены, шифрование AES-256-GCM"/>
+      <component name="smart_tasks" role="дневная квота: атомарный инкремент с потолком + возврат (Decrement)"/>
+      <component name="smart_task_jobs" role="статусы async-задач: переживают рестарт, чистятся воркером"/>
+      <component name="calendar_completions" role="выполненные события, стрик"/>
+      <component name="daily_advice" role="кэш совета дня"/>
+      <component name="backlog_ideas"/>
+      <component name="collab_spaces" role="пространства, участники, инвайты, предложения"/>
+      <component name="weekly_report" role="агрегаты для недельного отчёта (только SELECT)"/>
+    </layer>
+
+    <layer name="security" path="backend/security" role="JWT (access/refresh), bcrypt, AES-GCM для токенов"/>
+    <layer name="config" path="backend/config"
+           role="env-переменные + AppTimeZone/AppLocation — единственный источник таймзоны"/>
+    <layer name="migrations" path="backend/migrations"
+           role="Самописный раннер: embed *.sql по алфавиту, трекинг в schema_migrations, каждая в транзакции"/>
+  </backend>
+
+  <storage>
+    <postgres>
+      <table name="users"/>
+      <table name="user_google_calendar"/>
+      <table name="user_daily_smart_tasks" role="квота"/>
+      <table name="user_daily_advice" role="кэш"/>
+      <table name="user_backlog_ideas"/>
+      <table name="calendar_event_completions" role="XP и стрик"/>
+      <table name="collab_spaces, space_members, space_invites, task_proposals" migration="011"/>
+      <table name="smart_task_jobs" migration="012" role="статусы async-пайплайна"/>
+    </postgres>
+    <files path="uploads/avatars" served="/api/static/avatars/"/>
+  </storage>
+
+  <external>
+    <service name="Google Calendar API" auth="OAuth2 refresh-токен на пользователя"
+             usedBy="почти все фичи: события и есть задачи пользователя"/>
+    <service name="OpenRouter" role="LLM: умные задачи, совет дня, недельный отчёт"/>
+  </external>
+
+  <flows>
+    <flow name="Умная задача (async)">
+      <step n="1">POST /api/calendar/smart-task: валидация, проверка квоты, строка pending в smart_task_jobs → 202 + job_id</step>
+      <step n="2">Фон: слот семафора → running → занятые слоты из Google → LLM (+ повторный «ремонт» JSON) → нормализация задач</step>
+      <step n="3">Атомарное списание квоты → создание событий в Google Calendar</step>
+      <step n="4">Если события не создались — возврат квоты; полный провал = ошибка «лимит не потрачен»</step>
+      <step n="5">done/failed в БД; фронт опрашивает GET ?job=; чистильщик удаляет старые записи раз в 5 минут</step>
+      <step n="6">При старте процесса все зависшие pending/running помечаются failed («сервер был перезапущен»)</step>
+    </flow>
+    <flow name="Геймификация">
+      <step n="1">POST /events/{id}/complete: проверка события в Google → в одной транзакции INSERT completion + XP +25</step>
+      <step n="2">level = XP/100 + 1; стрик — по календарным дням в таймзоне приложения</step>
+    </flow>
+  </flows>
+
+  <invariants>
+    <invariant>Квота задаётся атомарно в SQL (INSERT ... ON CONFLICT ... WHERE не выше лимита) — гонки невозможны</invariant>
+    <invariant>Перерыв помечается двумя способами: extendedProperties pocketsecret_kind=break и префикс «☕ » в названии; фронт дублирует эвристику по префиксу — менять только синхронно в трёх местах</invariant>
+    <invariant>Таймзона — только config.AppTimeZone; литерал «Europe/Moscow» больше нигде не пишется</invariant>
+    <invariant>SQL живёт только в backend/repository; handlers в БД напрямую не ходят</invariant>
+  </invariants>
+</architecture>

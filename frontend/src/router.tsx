@@ -1,5 +1,6 @@
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from './auth/AuthContext'
+import { safeInternalPath } from './lib/safePath'
 import AppLayout from './layout/AppLayout'
 import Landing from './pages/Landing'
 import AppPage from './pages/AppPage'
@@ -14,15 +15,24 @@ import AppSessionLoading from './components/AppSessionLoading'
 
 function RequireAuth() {
   const { user, ready } = useAuth()
+  const location = useLocation()
   if (!ready) return <AppSessionLoading label="Загрузка сессии…" />
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) {
+    // Сохраняем адрес с query (например /spaces?token=…), чтобы после входа
+    // вернуть человека туда, куда он шёл — иначе ссылки-приглашения теряются.
+    return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
+  }
   return <Outlet />
 }
 
 function LoginRoute() {
   const { user, ready } = useAuth()
+  const location = useLocation()
   if (!ready) return <AppSessionLoading label="Загрузка…" />
-  if (user) return <Navigate to="/app" replace />
+  if (user) {
+    const from = safeInternalPath((location.state as { from?: string } | null)?.from)
+    return <Navigate to={from ?? '/app'} replace />
+  }
   return <AppAuthPage />
 }
 

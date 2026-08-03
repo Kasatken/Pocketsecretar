@@ -178,6 +178,8 @@
 }
 
 .cardGoogle {
+  display: flex;
+  flex-direction: column;
   background:
     linear-gradient(145deg, rgba(24, 138, 0, 0.045) 0%, transparent 40%),
     linear-gradient(165deg, #ffffff 0%, rgba(240, 253, 244, 0.72) 55%, #ffffff 100%);
@@ -191,10 +193,11 @@
 .googleMain {
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: center;
   align-items: stretch;
   gap: 0;
   min-width: 0;
+  flex: 1;
   /* Одна левая граница с иконкой и заголовком (отступ только у карточки .card) */
   padding: var(--s1) 0 0;
 }
@@ -371,25 +374,15 @@
   color: var(--royal);
 }
 
-.cardEyebrow {
-  margin: 0 0 var(--s1);
-  font-size: 0.618rem;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--royal);
-  overflow-wrap: anywhere;
-}
-
 .cardTitle {
   margin: 0;
   font-family: 'Inter', -apple-system, sans-serif;
   font-weight: 800;
-  font-size: 0.88rem;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  font-size: 1.05rem;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--royal);
-  line-height: 1.2;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 
@@ -624,24 +617,6 @@
   box-shadow:
     1px 1px 0 0 rgba(26, 39, 68, 0.14),
     inset 0 1px 0 rgba(255, 255, 255, 0.65);
-}
-
-.xpRankNum {
-  color: var(--accent);
-  font-weight: 800;
-}
-
-.xpRankSlash {
-  color: rgba(26, 39, 68, 0.35);
-  font-weight: 600;
-  font-size: 0.88em;
-  user-select: none;
-}
-
-.xpRankDen {
-  color: var(--muted);
-  font-weight: 700;
-  font-size: 0.92em;
 }
 
 .levelProgressSlot {
@@ -902,34 +877,36 @@
   max-width: 100%;
 }
 
-@media (min-width: 480px) {
-  .googleBody {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--s2) var(--s3);
-  }
-
-  .googleConnected {
-    flex: 1 1 12rem;
-    min-width: 0;
-  }
-
-  .googleBtn {
-    flex: 0 0 auto;
-  }
+.googleStatusBox {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  background:
+    linear-gradient(135deg, rgba(26, 39, 68, 0.05) 0%, transparent 55%),
+    rgba(24, 138, 0, 0.06);
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  min-width: 0;
 }
 
-.googleConnected {
+.googleStatusIcon {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.googleStatusText {
   margin: 0;
   font-size: 0.95rem;
-  line-height: 1.55;
+  font-weight: 700;
+  line-height: 1.45;
   color: var(--text);
   overflow-wrap: anywhere;
 }
 
-.googleConnected strong {
+.googleStatusText strong {
   color: var(--accent);
   font-weight: 800;
 }
@@ -1646,4 +1623,44 @@
   .weeklyUpcomingEvTitle {
     white-space: normal;
   }
+}
+
+.fieldSelect {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: var(--s2) var(--s3);
+  border-radius: 6px;
+  border: 2px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  width: 100%;
+  max-width: 100%;
+}
+
+.fieldSelect:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.tzDetectRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s1);
+  flex-wrap: wrap;
+}
+
+.googleRelink {
+  align-self: flex-start;
+  display: inline-block;
+  width: fit-content;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.googleRelink:hover {
+  color: var(--accent);
 }

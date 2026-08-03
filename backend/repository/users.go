@@ -33,6 +33,7 @@ func scanUser(row interface{ Scan(dest ...interface{}) error }) (*models.User, e
 		&u.Bio,
 		&u.PersonalizationNote,
 		&u.Chronotype,
+		&u.Timezone,
 		&u.ExperiencePoints,
 		&u.Level,
 		&u.Plan,
@@ -56,7 +57,7 @@ func (r *UserRepository) Create(ctx context.Context, email, passwordHash, displa
 		INSERT INTO users (email, password_hash, display_name)
 		VALUES ($1, $2, $3)
 		RETURNING id, email, password_hash, display_name, avatar_url, bio,
-			personalization_note, chronotype,
+			personalization_note, chronotype, timezone,
 			experience_points, level, plan, created_at, updated_at, last_login_at
 	`, email, passwordHash, displayName)
 	u, err := scanUser(row)
@@ -74,7 +75,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models
 	email = strings.TrimSpace(strings.ToLower(email))
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, email, password_hash, display_name, avatar_url, bio,
-			personalization_note, chronotype,
+			personalization_note, chronotype, timezone,
 			experience_points, level, plan, created_at, updated_at, last_login_at
 		FROM users WHERE email = $1
 	`, email)
@@ -91,7 +92,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models
 func (r *UserRepository) FindByID(ctx context.Context, id int64) (*models.User, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, email, password_hash, display_name, avatar_url, bio,
-			personalization_note, chronotype,
+			personalization_note, chronotype, timezone,
 			experience_points, level, plan, created_at, updated_at, last_login_at
 		FROM users WHERE id = $1
 	`, id)
@@ -121,8 +122,8 @@ func (r *UserRepository) SetPlan(ctx context.Context, userID int64, plan string)
 
 func (r *UserRepository) UpdateProfile(ctx context.Context, user *models.User) error {
 	_, err := r.db.ExecContext(ctx, `
-		UPDATE users SET display_name = $2, bio = $3, personalization_note = $4, chronotype = $5, updated_at = NOW() WHERE id = $1
-	`, user.ID, user.DisplayName, user.Bio, user.PersonalizationNote, user.Chronotype)
+		UPDATE users SET display_name = $2, bio = $3, personalization_note = $4, chronotype = $5, timezone = $6, updated_at = NOW() WHERE id = $1
+	`, user.ID, user.DisplayName, user.Bio, user.PersonalizationNote, user.Chronotype, user.Timezone)
 	return err
 }
 

@@ -1418,3 +1418,87 @@
     min-height: 24px;
   }
 }
+
+/* ── Название дела для фокус-блока Pomodoro ── */
+.focusTaskRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  margin-bottom: var(--s2);
+}
+
+.focusTaskInput {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.35rem 0.6rem;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+}
+
+.focusTaskInput:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.focusTaskInput::placeholder {
+  color: var(--muted);
+}
+
+.focusTaskClear {
+  flex: 0 0 auto;
+  width: 1.6rem;
+  height: 1.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.focusTaskClear:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.focusTaskChip {
+  display: inline-block;
+  max-width: 100%;
+  margin: -0.2rem 0 var(--s2);
+  padding: 0.22rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--dark);
+  background: var(--gbg);
+  border: 1.5px solid var(--gborder);
+  border-radius: 999px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.focusTaskChip:hover {
+  border-color: var(--accent);
+}
+
+/* Название дела внутри кольца таймера — обычным регистром, максимум две строки */
+.timerSubTask {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.62rem;
+  max-width: 5.6rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--dark);
+}

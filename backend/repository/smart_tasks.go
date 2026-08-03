@@ -67,6 +67,21 @@ func (r *SmartTaskRepository) TryIncrementCapped(ctx context.Context, userID int
 	return int(out.Int64), true, nil
 }
 
+// Decrement возвращает delta в дневной лимит (компенсация, когда события не удалось создать в календаре).
+// Не даёт счётчику уйти ниже нуля.
+func (r *SmartTaskRepository) Decrement(ctx context.Context, userID int64, dayUTC time.Time, delta int) error {
+	if delta <= 0 {
+		return nil
+	}
+	day := time.Date(dayUTC.Year(), dayUTC.Month(), dayUTC.Day(), 0, 0, 0, 0, time.UTC)
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE user_daily_smart_tasks
+		SET task_count = GREATEST(task_count - $3, 0)
+		WHERE user_id = $1 AND day = $2::date
+	`, userID, day.Format("2006-01-02"), delta)
+	return err
+}
+
 // SumForLastDays returns total smart tasks created by the user in the last days days.
 func (r *SmartTaskRepository) SumForLastDays(ctx context.Context, userID int64, days int) (int, error) {
 	since := time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02")

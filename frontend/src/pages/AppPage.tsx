@@ -23,6 +23,7 @@ import { getEffectiveSkyHour, previewSkyGradientAtHour } from '../lib/dayGaugeSk
 import { LevelProgress } from '../components/LevelProgress'
 import { SpaceProposalCalendarBadge } from '../components/SpaceProposalCalendarBadge'
 import MissedTasksReview from '../components/MissedTasksReview'
+import { useCompletionBurst } from '../components/CompletionBurst'
 import s from './AppPage.module.css'
 
 function displayLabel(user: User | null) {
@@ -120,6 +121,23 @@ export default function AppPage() {
   const [calSyncGen, setCalSyncGen] = useState(0)
   const pomodoro = usePomodoro()
   const [pomodoroSettingsOpen, setPomodoroSettingsOpen] = useState(false)
+  const { burstNode, celebrate } = useCompletionBurst()
+  /** Название дела для фокус-блока Pomodoro (живёт между сессиями). */
+  const [focusTask, setFocusTask] = useState<string>(() => {
+    try {
+      return window.localStorage.getItem('pomodoro-focus-task') ?? ''
+    } catch {
+      return ''
+    }
+  })
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('pomodoro-focus-task', focusTask)
+    } catch {
+      /* приватный режим — не сохраняем */
+    }
+  }, [focusTask])
 
   const pomodoroPhaseTotalSec = phaseDurationSeconds(pomodoro.phase, pomodoro.settings)
   const pomodoroRingProgress =
@@ -239,9 +257,11 @@ export default function AppPage() {
       if (isSpaceProposalGhostEvent(ev)) return
       setTaskCompletingId(ev.id)
       setTaskActionError(null)
+      const prevUser = user
       try {
-        await completeCalendarEvent(accessToken, ev.id)
+        const res = await completeCalendarEvent(accessToken, ev.id)
         markTaskCompleted(ev.id)
+        if (!res.already_completed) celebrate(prevUser, res.user)
         await refreshSession()
       } catch (err) {
         if (err instanceof Error && err.message === '401') {
@@ -251,8 +271,9 @@ export default function AppPage() {
             return
           }
           try {
-            await completeCalendarEvent(newToken, ev.id)
+            const res = await completeCalendarEvent(newToken, ev.id)
             markTaskCompleted(ev.id)
+            if (!res.already_completed) celebrate(prevUser, res.user)
             await refreshSession()
           } catch (retryErr) {
             setTaskActionError(retryErr instanceof Error ? retryErr.message : 'Не удалось отметить выполненным')
@@ -264,7 +285,7 @@ export default function AppPage() {
         setTaskCompletingId(null)
       }
     },
-    [accessToken, linked, taskDeletingId, taskCompletingId, markTaskCompleted, refreshSession, navigate],
+    [accessToken, linked, taskDeletingId, taskCompletingId, markTaskCompleted, refreshSession, navigate, user, celebrate],
   )
 
   const handleDeleteTask = useCallback(
@@ -470,6 +491,7 @@ export default function AppPage() {
 
   return (
     <div className={s.page}>
+      {burstNode}
       <div className={s.shell}>
         <div className={s.todayLayout}>
           <div className={s.todayLeft}>
@@ -536,6 +558,37 @@ export default function AppPage() {
                       <Settings size={16} strokeWidth={2.25} aria-hidden />
                     </button>
                   </div>
+                  <div className={s.focusTaskRow}>
+                    <input
+                      className={s.focusTaskInput}
+                      value={focusTask}
+                      onChange={(e) => setFocusTask(e.target.value)}
+                      placeholder="Над чем фокус?"
+                      maxLength={80}
+                      aria-label="Название дела для фокус-режима"
+                    />
+                    {focusTask ? (
+                      <button
+                        type="button"
+                        className={s.focusTaskClear}
+                        onClick={() => setFocusTask('')}
+                        aria-label="Очистить название дела"
+                        title="Очистить"
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
+                  {!focusTask && nextEvent ? (
+                    <button
+                      type="button"
+                      className={s.focusTaskChip}
+                      onClick={() => setFocusTask(nextEvent.title)}
+                      title="Подставить ближайшее дело из календаря"
+                    >
+                      Из плана: «{nextEvent.title.length > 34 ? `${nextEvent.title.slice(0, 34)}…` : nextEvent.title}»
+                    </button>
+                  ) : null}
                   <div
                     className={`${s.timer} ${pomodoroPhaseClass}`}
                     data-running={pomodoro.running ? 'true' : undefined}
@@ -559,7 +612,16 @@ export default function AppPage() {
                         </svg>
                         <div className={s.timerRingInner}>
                           <div className={s.timerDisplay}>{formatPomodoroClock(pomodoro.remaining)}</div>
-                          <p className={s.timerSub}>{phaseLabelRu(pomodoro.phase)}</p>
+                          <p
+                            className={
+                              pomodoro.phase === 'work' && focusTask.trim()
+                                ? `${s.timerSub} ${s.timerSubTask}`
+                                : s.timerSub
+                            }
+                            title={pomodoro.phase === 'work' && focusTask.trim() ? focusTask.trim() : undefined}
+                          >
+                            {pomodoro.phase === 'work' && focusTask.trim() ? focusTask.trim() : phaseLabelRu(pomodoro.phase)}
+                          </p>
                         </div>
                       </div>
                       <div className={s.timerSide}>

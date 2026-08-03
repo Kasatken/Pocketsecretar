@@ -29,9 +29,9 @@ export function LevelProgress({ user, variant = 'card' }: LevelProgressProps) {
   if (xp === 0) {
     hint = 'Выполни задачу в календаре, чтобы получить XP'
   } else if (xp > 0 && xp % XP_PER_LEVEL_SEGMENT === 0) {
-    hint = 'Уровень повышен — до следующего нужно 100 XP'
+    hint = `Уровень повышен! 100 XP до уровня ${level + 1}`
   } else {
-    hint = `До следующего уровня: ${remaining} XP`
+    hint = `${remaining} XP до уровня ${level + 1}`
   }
 
   if (variant === 'inline') {
@@ -40,9 +40,7 @@ export function LevelProgress({ user, variant = 'card' }: LevelProgressProps) {
         <div className={s.progressTrack}>
           <div className={s.progressFill} style={{ width: `${pct}%` }} />
         </div>
-        <p className={s.progressHint}>
-          {hint} · ур. {level}
-        </p>
+        <p className={s.progressHint}>{hint}</p>
       </div>
     )
   }

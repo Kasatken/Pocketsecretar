@@ -13,6 +13,16 @@ function typeLabel(t: string) {
   return 'Другое'
 }
 
+/** Серверные ошибки вступления — в понятный человеку текст. */
+function joinErrorRu(msg: string): string {
+  const m = msg.toLowerCase()
+  if (m.includes('invalid invite'))
+    return 'Ссылка недействительна или уже использована. Если вы уже вступали — пространство есть в списке ниже.'
+  if (m.includes('invite expired')) return 'Срок действия ссылки истёк — попросите новую.'
+  if (m.includes('another email')) return 'Эта ссылка выписана на другой email.'
+  return msg
+}
+
 export default function SpacesPage() {
   const { accessToken, refreshSession } = useAuth()
   const navigate = useNavigate()
@@ -29,6 +39,7 @@ export default function SpacesPage() {
   const [joinLink, setJoinLink] = useState('')
   const [joinBusy, setJoinBusy] = useState(false)
   const [joinOk, setJoinOk] = useState<string | null>(null)
+  const [joinOpen, setJoinOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
 
   useEffect(() => {
@@ -87,7 +98,7 @@ export default function SpacesPage() {
           })
           return
         }
-        setErr(e instanceof Error ? e.message : 'Не удалось вступить')
+        setErr(e instanceof Error ? joinErrorRu(e.message) : 'Не удалось вступить')
       })
       .finally(() => setJoinBusy(false))
   }, [accessToken]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -136,7 +147,7 @@ export default function SpacesPage() {
         if (!ok) navigate('/login', { replace: true })
         return
       }
-      setErr(e instanceof Error ? e.message : 'Не удалось вступить')
+      setErr(e instanceof Error ? joinErrorRu(e.message) : 'Не удалось вступить')
     } finally {
       setJoinBusy(false)
     }
@@ -242,27 +253,48 @@ export default function SpacesPage() {
                 Вступить
               </h2>
             </div>
-            <p className={s.collapsibleHint}>Вставьте ссылку приглашения или только токен — поле поймёт оба варианта.</p>
-            <form className={s.joinForm} onSubmit={onJoin}>
-              <div className={s.field}>
-                <label className={s.fieldLabel} htmlFor="join-link">
-                  Ссылка или токен
-                </label>
-                <input
-                  id="join-link"
-                  className={s.fieldInput}
-                  value={joinLink}
-                  onChange={(e) => setJoinLink(e.target.value)}
-                  autoComplete="off"
-                  placeholder="https://…?token=…"
-                />
-              </div>
-              <div className={s.topCardFoot}>
-                <button type="submit" className={a.addBtn} disabled={joinBusy || !joinLink.trim()}>
-                  {joinBusy ? 'Вступаем…' : 'Вступить'}
-                </button>
-              </div>
-            </form>
+            {!joinOpen ? (
+              <>
+                <p className={s.collapsibleHint}>
+                  Получили ссылку-приглашение? Достаточно просто открыть её. Если не сработало — вставьте вручную.
+                </p>
+                <div className={s.topCardGrow} aria-hidden />
+                <div className={s.topCardFoot}>
+                  <button type="button" className={a.addBtn} onClick={() => setJoinOpen(true)}>
+                    У меня есть ссылка
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className={s.createExpandedBar}>
+                  <p className={s.collapsibleHint}>Вставьте ссылку или только токен — поле поймёт оба варианта.</p>
+                  <button type="button" className={s.btnSmall} onClick={() => setJoinOpen(false)}>
+                    Свернуть
+                  </button>
+                </div>
+                <form className={s.joinForm} onSubmit={onJoin}>
+                  <div className={s.field}>
+                    <label className={s.fieldLabel} htmlFor="join-link">
+                      Ссылка или токен
+                    </label>
+                    <input
+                      id="join-link"
+                      className={s.fieldInput}
+                      value={joinLink}
+                      onChange={(e) => setJoinLink(e.target.value)}
+                      autoComplete="off"
+                      placeholder="https://…?token=…"
+                    />
+                  </div>
+                  <div className={s.topCardFoot}>
+                    <button type="submit" className={a.addBtn} disabled={joinBusy || !joinLink.trim()}>
+                      {joinBusy ? 'Вступаем…' : 'Вступить'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
           </section>
 
           <section className={a.card} aria-labelledby="create-h">

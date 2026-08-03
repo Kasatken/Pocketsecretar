@@ -22,16 +22,26 @@ import (
 )
 
 // SmartTaskHandler — POST /api/calendar/smart-task (OpenRouter + Google Calendar).
+// smartTaskMaxConcurrent — сколько smart-task job выполняются одновременно;
+// лишние ждут свободного слота в статусе pending (фронт это уже показывает).
+const smartTaskMaxConcurrent = 8
+
 type SmartTaskHandler struct {
 	cfg    config.Config
 	google *repository.GoogleCalendarRepository
 	quota  *repository.SmartTaskRepository
 	users  *repository.UserRepository
-	jobs   *smartTaskJobStore
+	jobs   *repository.SmartTaskJobRepository
+	// llmSlots — семафор на параллельные фоновые job (LLM + Google), чтобы наплыв
+	// запросов не породил неограниченное число горутин с 90-секундными вызовами.
+	llmSlots chan struct{}
 }
 
-func NewSmartTaskHandler(cfg config.Config, google *repository.GoogleCalendarRepository, quota *repository.SmartTaskRepository, users *repository.UserRepository) *SmartTaskHandler {
-	return &SmartTaskHandler{cfg: cfg, google: google, quota: quota, users: users, jobs: newSmartTaskJobStore()}
+func NewSmartTaskHandler(cfg config.Config, google *repository.GoogleCalendarRepository, quota *repository.SmartTaskRepository, users *repository.UserRepository, jobs *repository.SmartTaskJobRepository) *SmartTaskHandler {
+	return &SmartTaskHandler{
+		cfg: cfg, google: google, quota: quota, users: users, jobs: jobs,
+		llmSlots: make(chan struct{}, smartTaskMaxConcurrent),
+	}
 }
 
 func (h *SmartTaskHandler) googleOAuthReady() bool {
@@ -329,8 +339,7 @@ func tasksToAPI(tasks []aiTaskRaw) []map[string]interface{} {
 	return out
 }
 
-func (h *SmartTaskHandler) buildBusySlotsText(ctx context.Context, userID int64, todayStr, refresh string) string {
-	_ = userID
+func (h *SmartTaskHandler) buildBusySlotsText(ctx context.Context, todayStr, refresh string, loc *time.Location) string {
 	parts := strings.Split(todayStr, "-")
 	if len(parts) != 3 {
 		return ""
@@ -338,10 +347,6 @@ func (h *SmartTaskHandler) buildBusySlotsText(ctx context.Context, userID int64,
 	y, _ := strconv.Atoi(parts[0])
 	m, _ := strconv.Atoi(parts[1])
 	d, _ := strconv.Atoi(parts[2])
-	loc, err := time.LoadLocation("Europe/Moscow")
-	if err != nil {
-		loc = time.UTC
-	}
 	start := time.Date(y, time.Month(m), d, 0, 0, 0, 0, loc)
 	endDay := start.AddDate(0, 0, 6)
 	end := time.Date(endDay.Year(), endDay.Month(), endDay.Day(), 23, 59, 59, 999_999_999, loc)
@@ -513,7 +518,7 @@ func capSmartTasksRespectingQuota(tasks []aiTaskRaw, maxNonBreak int) ([]aiTaskR
 	return out, truncated
 }
 
-func normalizeTask(one aiTaskRaw, userText, todayStr string, idx int) aiTaskRaw {
+func normalizeTask(one aiTaskRaw, userText, todayStr string, idx int, loc *time.Location) aiTaskRaw {
 	t := one
 	t.Kind = strings.TrimSpace(strings.ToLower(one.Kind))
 	if t.Kind != "break" {
@@ -550,13 +555,7 @@ func normalizeTask(one aiTaskRaw, userText, todayStr string, idx int) aiTaskRaw 
 	t.Time = normalizeHM(t.Time)
 	// Если задача приходится на сегодня, а время уже прошло — сдвигаем на сейчас+15 мин.
 	if t.Date == todayStr {
-		nowMoscow := time.Now().In(func() *time.Location {
-			l, err := time.LoadLocation("Europe/Moscow")
-			if err != nil {
-				return time.UTC
-			}
-			return l
-		}())
+		nowMoscow := time.Now().In(loc)
 		nowMin := nowMoscow.Hour()*60 + nowMoscow.Minute()
 		th, tm := parseHM(t.Time)
 		if th*60+tm <= nowMin {

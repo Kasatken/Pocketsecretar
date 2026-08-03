@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"strings"
 	"time"
 
+	"pocketsecret/config"
 	"pocketsecret/models"
 )
 
@@ -15,6 +17,7 @@ func publicUserJSON(u *models.User) map[string]interface{} {
 		"bio":                   u.Bio,
 		"personalization_note":  u.PersonalizationNote,
 		"chronotype":            u.Chronotype,
+		"timezone":              u.Timezone,
 		"experience_points":     u.ExperiencePoints,
 		"level":                 u.Level,
 		"plan":                  u.Plan,
@@ -27,4 +30,17 @@ func publicUserJSON(u *models.User) map[string]interface{} {
 		out["last_login_at"] = nil
 	}
 	return out
+}
+
+// userLocation возвращает таймзону пользователя; при пустой или неизвестной — таймзону приложения.
+func userLocation(u *models.User) (*time.Location, string) {
+	if u != nil {
+		tz := strings.TrimSpace(u.Timezone)
+		if tz != "" {
+			if loc, err := time.LoadLocation(tz); err == nil {
+				return loc, tz
+			}
+		}
+	}
+	return config.AppLocation(), config.AppTimeZone
 }

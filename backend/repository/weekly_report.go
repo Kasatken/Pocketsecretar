@@ -3,7 +3,10 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
+
+	"pocketsecret/config"
 )
 
 // DayCount хранит количество выполненных задач за один день.
@@ -23,11 +26,14 @@ func NewWeeklyReportRepository(db *sql.DB) *WeeklyReportRepository {
 }
 
 // CompletionsByDay возвращает количество выполненных задач по дням
-// в диапазоне [start, end) в часовом поясе Europe/Moscow.
-func (r *WeeklyReportRepository) CompletionsByDay(ctx context.Context, userID int64, start, end time.Time) ([]DayCount, error) {
+// в диапазоне [start, end); tz — IANA-таймзона границ дня (пустая — таймзона приложения).
+func (r *WeeklyReportRepository) CompletionsByDay(ctx context.Context, userID int64, start, end time.Time, tz string) ([]DayCount, error) {
+	if strings.TrimSpace(tz) == "" {
+		tz = config.AppTimeZone
+	}
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT
-			DATE(completed_at AT TIME ZONE 'Europe/Moscow')::text AS day,
+			DATE(completed_at AT TIME ZONE $4::text)::text AS day,
 			COUNT(*)::int AS cnt
 		FROM calendar_event_completions
 		WHERE user_id = $1
@@ -35,7 +41,7 @@ func (r *WeeklyReportRepository) CompletionsByDay(ctx context.Context, userID in
 		  AND completed_at < $3
 		GROUP BY 1
 		ORDER BY 1
-	`, userID, start.UTC(), end.UTC())
+	`, userID, start.UTC(), end.UTC(), tz)
 	if err != nil {
 		return nil, err
 	}

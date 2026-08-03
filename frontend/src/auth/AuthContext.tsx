@@ -8,6 +8,7 @@ export type User = {
   bio?: string
   personalization_note?: string
   chronotype?: string
+  timezone?: string
   experience_points: number
   level: number
   plan: string
@@ -22,7 +23,7 @@ export type User = {
 }
 
 export type ProfilePatch = Partial<
-  Pick<User, 'display_name' | 'bio' | 'personalization_note' | 'chronotype'>
+  Pick<User, 'display_name' | 'bio' | 'personalization_note' | 'chronotype' | 'timezone'>
 >
 
 type AuthPayload = { access_token: string; user: User }

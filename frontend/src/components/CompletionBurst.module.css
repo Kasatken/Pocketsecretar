@@ -1,0 +1,156 @@
+/* Празднование выполнения: цвета зафиксированы под палитру сайта (зелёный/навигаторский/мята). */
+
+.burstRoot {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 24vh;
+  pointer-events: none;
+  z-index: 1200;
+}
+
+.xpPill {
+  padding: 0.5rem 1.15rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(180deg, #1faa08 0%, #188a00 100%);
+  border: 2px solid #1a2744;
+  border-radius: 999px;
+  box-shadow: 3px 3px 0 0 rgba(26, 39, 68, 0.85);
+  animation: xpFloat 1.5s ease-out forwards;
+}
+
+@keyframes xpFloat {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.85);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(0) scale(1.06);
+  }
+  32% {
+    transform: translateY(-2px) scale(1);
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-46px) scale(0.96);
+  }
+}
+
+.levelWrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  animation: levelIn 2.5s ease-out forwards;
+}
+
+@keyframes levelIn {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.8);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1.05);
+  }
+  22% {
+    transform: scale(1);
+  }
+  82% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+}
+
+.levelPill {
+  padding: 0.65rem 1.5rem;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(180deg, #26365c 0%, #1a2744 100%);
+  border: 2px solid #188a00;
+  border-radius: 12px;
+  box-shadow: 4px 4px 0 0 rgba(24, 138, 0, 0.55);
+}
+
+.xpPillSmall {
+  padding: 0.3rem 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #fff;
+  background: #188a00;
+  border: 2px solid #1a2744;
+  border-radius: 999px;
+}
+
+.confetti {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+}
+
+.confettiPiece {
+  position: absolute;
+  width: 8px;
+  height: 13px;
+  border-radius: 2px;
+  opacity: 0;
+  animation: confettiFly 2s ease-out forwards;
+}
+
+@keyframes confettiFly {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  8% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx, 0), var(--dy, -120px)) rotate(var(--rot, 320deg));
+  }
+}
+
+.confettiPiece:nth-child(1)  { --dx: -130px; --dy: -110px; --rot: 380deg; background: #188a00; }
+.confettiPiece:nth-child(2)  { --dx: 120px;  --dy: -130px; --rot: -340deg; background: #1a2744; animation-delay: 0.04s; }
+.confettiPiece:nth-child(3)  { --dx: -70px;  --dy: -160px; --rot: 300deg; background: #5dcaa5; animation-delay: 0.08s; }
+.confettiPiece:nth-child(4)  { --dx: 65px;   --dy: -170px; --rot: -280deg; background: #1faa08; animation-delay: 0.02s; }
+.confettiPiece:nth-child(5)  { --dx: -170px; --dy: -40px;  --rot: 420deg; background: #26365c; animation-delay: 0.1s; }
+.confettiPiece:nth-child(6)  { --dx: 175px;  --dy: -55px;  --rot: -400deg; background: #9fe1cb; animation-delay: 0.06s; }
+.confettiPiece:nth-child(7)  { --dx: -105px; --dy: 60px;   --rot: 260deg; background: #188a00; animation-delay: 0.12s; }
+.confettiPiece:nth-child(8)  { --dx: 95px;   --dy: 70px;   --rot: -300deg; background: #1a2744; animation-delay: 0.05s; }
+.confettiPiece:nth-child(9)  { --dx: -40px;  --dy: 110px;  --rot: 340deg; background: #5dcaa5; animation-delay: 0.14s; }
+.confettiPiece:nth-child(10) { --dx: 45px;   --dy: 100px;  --rot: -260deg; background: #1faa08; animation-delay: 0.09s; }
+.confettiPiece:nth-child(11) { --dx: -200px; --dy: -140px; --rot: 460deg; background: #9fe1cb; animation-delay: 0.03s; }
+.confettiPiece:nth-child(12) { --dx: 205px;  --dy: -115px; --rot: -440deg; background: #26365c; animation-delay: 0.11s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .confettiPiece {
+    display: none;
+  }
+  .xpPill,
+  .levelWrap {
+    animation: reducedFade 1.2s ease forwards;
+  }
+  @keyframes reducedFade {
+    0% { opacity: 0; }
+    15% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+}

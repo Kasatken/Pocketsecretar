@@ -560,6 +560,21 @@ func (h *CollabHandler) JoinSpace(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "this invite is for another email"})
 		return
 	}
+	// Уже участник (повторный клик по той же ссылке) — отвечаем успехом и не сжигаем инвайт.
+	if already, e := h.collab.IsMember(ctx, inv.SpaceID, userID); e == nil && already {
+		s, sErr := h.collab.GetSpace(ctx, inv.SpaceID)
+		if sErr != nil || s == nil {
+			log.Printf("collab join get space (already member): %v", sErr)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load space"})
+			return
+		}
+		if mem, _ := h.collab.GetMembership(ctx, inv.SpaceID, userID); mem != nil {
+			s.MyRole = mem.Role
+			s.MyShare = mem.ShareAccess
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"space": spaceToJSON(s), "already_member": true})
+		return
+	}
 	if err := h.collab.AddMember(ctx, inv.SpaceID, userID, inv.Role, inv.ShareAccess); err != nil {
 		log.Printf("collab add member: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to join"})

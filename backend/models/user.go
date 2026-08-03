@@ -11,6 +11,7 @@ type User struct {
 	Bio                 string
 	PersonalizationNote string
 	Chronotype          string
+	Timezone            string
 	ExperiencePoints    int64
 	Level               int
 	Plan                string

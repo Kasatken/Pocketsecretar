@@ -105,6 +105,7 @@ export default function SpacePage() {
   const [pEnd, setPEnd] = useState('')
   const [propBusy, setPropBusy] = useState(false)
   const [proposeOpen, setProposeOpen] = useState(false)
+  const [showSchedule, setShowSchedule] = useState(false)
 
   const [proposalsHistoryOpen, setProposalsHistoryOpen] = useState(true)
 
@@ -162,6 +163,7 @@ export default function SpacePage() {
     setInviteAdvanced(false)
     setCopied(false)
     setProposeOpen(false)
+    setShowSchedule(false)
     setInviteToken(null)
     setAssigneeId(0)
     setProposalsHistoryOpen(true)
@@ -194,11 +196,18 @@ export default function SpacePage() {
 
   const copyInviteLink = (token: string) => {
     const link = `${window.location.origin}/spaces?token=${encodeURIComponent(token)}`
-    void navigator.clipboard.writeText(link).then(() => {
+    const markCopied = () => {
       setCopied(true)
       if (copiedTimerRef.current !== null) clearTimeout(copiedTimerRef.current)
       copiedTimerRef.current = setTimeout(() => setCopied(false), 2500)
-    })
+    }
+    // В Telegram/встроенных браузерах clipboard может быть недоступен —
+    // тогда ссылка остаётся видимой в блоке ниже, копируют вручную.
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(link).then(markCopied).catch(() => setCopied(false))
+    } else {
+      setCopied(false)
+    }
   }
 
   const onQuickInvite = async () => {
@@ -373,16 +382,18 @@ export default function SpacePage() {
             <section className={`${a.card} ${a.cardWide}`} aria-labelledby="mem-h">
               <div className={a.cardHeader}>
                 <h2 className={a.cardTitle} id="mem-h">
-                  Участники
+                  Участники ({members.length})
                 </h2>
               </div>
               {members.map((m) => (
-                <div key={m.user_id} className={s.memberLine}>
+                <div
+                  key={m.user_id}
+                  className={s.memberLine}
+                  title={`${m.email} · доступ: ${shareRu(m.share_access)}`}
+                >
                   <span className={s.memberName}>{m.display_name?.trim() || m.email}</span>
-                  <span className={a.muted}>
-                    {' '}
-                    · {m.email} · {roleRu(m.role)} · {shareRu(m.share_access)}
-                  </span>
+                  {m.role !== 'member' ? <span className={a.muted}> · {roleRu(m.role)}</span> : null}
+                  {myId === m.user_id ? <span className={a.muted}> · вы</span> : null}
                 </div>
               ))}
             </section>
@@ -610,31 +621,43 @@ export default function SpacePage() {
                           maxLength={8000}
                         />
                       </div>
-                      <div className={s.field}>
-                        <label className={s.fieldLabel} htmlFor="ps">
-                          Начало (если нужен слот в календаре)
-                        </label>
-                        <input
-                          id="ps"
-                          type="datetime-local"
-                          className={s.fieldInput}
-                          value={pStart}
-                          onChange={(e) => setPStart(e.target.value)}
-                        />
-                      </div>
-                      <div className={s.field}>
-                        <label className={s.fieldLabel} htmlFor="pe">
-                          Конец
-                        </label>
-                        <input
-                          id="pe"
-                          type="datetime-local"
-                          className={s.fieldInput}
-                          value={pEnd}
-                          onChange={(e) => setPEnd(e.target.value)}
-                        />
-                      </div>
-                      <p className={s.fieldHint}>Начало и конец указывайте вместе, иначе событие в календарь не попадёт.</p>
+                      <button
+                        type="button"
+                        className={s.btnSmall}
+                        style={{ marginBottom: 'var(--s3)' }}
+                        onClick={() => setShowSchedule((o) => !o)}
+                      >
+                        {showSchedule ? '▲ Без времени' : '▼ Указать время в календаре'}
+                      </button>
+                      {showSchedule && (
+                        <>
+                          <div className={s.field}>
+                            <label className={s.fieldLabel} htmlFor="ps">
+                              Начало
+                            </label>
+                            <input
+                              id="ps"
+                              type="datetime-local"
+                              className={s.fieldInput}
+                              value={pStart}
+                              onChange={(e) => setPStart(e.target.value)}
+                            />
+                          </div>
+                          <div className={s.field}>
+                            <label className={s.fieldLabel} htmlFor="pe">
+                              Конец
+                            </label>
+                            <input
+                              id="pe"
+                              type="datetime-local"
+                              className={s.fieldInput}
+                              value={pEnd}
+                              onChange={(e) => setPEnd(e.target.value)}
+                            />
+                          </div>
+                          <p className={s.fieldHint}>Начало и конец указывайте вместе, иначе событие в календарь не попадёт.</p>
+                        </>
+                      )}
                       <button type="submit" className={a.addBtn} disabled={propBusy || !pTitle.trim()}>
                         {propBusy ? 'Отправка…' : 'Отправить'}
                       </button>
@@ -721,7 +744,7 @@ export default function SpacePage() {
                           </div>
                         )}
                         {p.google_event_id ? (
-                          <p className={a.muted}>Календарь: {p.google_event_id}</p>
+                          <p className={a.muted}>✓ В календаре исполнителя</p>
                         ) : null}
                       </li>
                     ))}
@@ -731,21 +754,11 @@ export default function SpacePage() {
             </section>
 
             {isCreator ? (
-              <section className={`${a.card} ${a.cardWide}`} aria-labelledby="del-h">
-                <div className={a.cardHeader}>
-                  <h2 className={a.cardTitle} id="del-h">
-                    Опасная зона
-                  </h2>
-                </div>
-                <p className={s.collapsibleHint}>
-                  Удалить пространство может только создатель. У всех участников оно пропадёт из списка вместе с предложениями.
-                </p>
-                <div className={s.rowActions}>
-                  <button type="button" className={s.btnDanger} disabled={deleteBusy} onClick={() => void onDeleteSpace()}>
-                    {deleteBusy ? 'Удаляем…' : 'Удалить пространство'}
-                  </button>
-                </div>
-              </section>
+              <div className={s.rowActions}>
+                <button type="button" className={s.btnDanger} disabled={deleteBusy} onClick={() => void onDeleteSpace()}>
+                  {deleteBusy ? 'Удаляем…' : 'Удалить пространство…'}
+                </button>
+              </div>
             ) : null}
           </>
         )}

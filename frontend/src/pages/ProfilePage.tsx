@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import type { User } from '../auth/AuthContext'
 import { CHRONOTYPE_OPTIONS, chronotypeLabel } from '../lib/chronotypes'
+import { DEFAULT_TIMEZONE, TIMEZONE_OPTIONS, detectBrowserTimezone, timezoneLabel } from '../lib/timezones'
 import { formatQuotaResetsAtHint } from '../lib/smartTaskQuota'
 import { fetchWeeklyReport, formatEventStart, type WeeklyReport } from '../lib/weeklyReportApi'
 import { LevelProgress } from '../components/LevelProgress'
@@ -49,6 +50,7 @@ export default function ProfilePage() {
   const [personalizationOpen, setPersonalizationOpen] = useState(false)
   const [persNote, setPersNote] = useState('')
   const [persChrono, setPersChrono] = useState('')
+  const [persTz, setPersTz] = useState(DEFAULT_TIMEZONE)
   const [savingPers, setSavingPers] = useState(false)
   const [xpRank, setXpRank] = useState<XpRankResponse | null>(null)
   const [statsHelpOpen, setStatsHelpOpen] = useState(false)
@@ -247,6 +249,7 @@ export default function ProfilePage() {
       await updateProfile({
         personalization_note: persNote.trim(),
         chronotype: persChrono.trim(),
+        timezone: persTz.trim() || DEFAULT_TIMEZONE,
       })
       setFlash({ type: 'ok', text: 'Персонализация сохранена.' })
       setPersonalizationOpen(false)
@@ -297,9 +300,8 @@ export default function ProfilePage() {
               <i className={`fa-solid fa-user ${s.faCardIcon}`} />
             </span>
             <div className={s.cardHeaderText}>
-              <p className={s.cardEyebrow}>Профиль</p>
               <h2 id="profile-heading" className={s.cardTitle}>
-                Имя и аватар
+                Профиль
               </h2>
             </div>
             <div className={s.cardHeaderActions}>
@@ -370,11 +372,7 @@ export default function ProfilePage() {
                     title="Место в рейтинге по суммарному опыту"
                     aria-label={`Место в рейтинге опыта: ${xpRank.rank} из ${xpRank.total_users}`}
                   >
-                    <span className={s.xpRankNum}>{xpRank.rank.toLocaleString('ru-RU')}</span>
-                    <span className={s.xpRankSlash} aria-hidden>
-                      /
-                    </span>
-                    <span className={s.xpRankDen}>{xpRank.total_users.toLocaleString('ru-RU')}</span>
+                    №{xpRank.rank.toLocaleString('ru-RU')} из {xpRank.total_users.toLocaleString('ru-RU')}
                   </span>
                 ) : null}
               </p>
@@ -424,9 +422,8 @@ export default function ProfilePage() {
               <i className={`fa-solid fa-calendar-days ${s.faCardIcon}`} />
             </span>
             <div className={s.cardHeaderText}>
-              <p className={s.cardEyebrow}>Синхронизация</p>
               <h2 id="google-heading" className={s.cardTitle}>
-                Календарь Google
+                Google Календарь
               </h2>
             </div>
           </div>
@@ -436,11 +433,19 @@ export default function ProfilePage() {
               <p className={s.hintMuted}>Календарь на сервере пока не настроен.</p>
             ) : google?.linked ? (
               <div className={s.googleBody}>
-                <p className={s.googleConnected}>
-                  Подключено: {google.google_email ? <strong>{google.google_email}</strong> : 'Google'}
+                <div className={s.googleStatusBox}>
+                  <span className={s.googleStatusIcon} aria-hidden>
+                    <i className="fa-solid fa-circle-check" />
+                  </span>
+                  <p className={s.googleStatusText}>
+                    Подключено: {google.google_email ? <strong>{google.google_email}</strong> : 'Google'}
+                  </p>
+                </div>
+                <p className={s.hintMuted}>
+                  События из Google показываются в приложении, а умные задачи от ИИ попадают прямо в календарь.
                 </p>
-                <a className={s.googleBtn} href="/api/auth/google/start">
-                  Обновить доступ
+                <a className={s.googleRelink} href="/api/auth/google/start">
+                  Переподключить доступ
                 </a>
               </div>
             ) : (
@@ -463,7 +468,6 @@ export default function ProfilePage() {
               <i className={`fa-solid fa-wand-magic-sparkles ${s.faCardIcon}`} />
             </span>
             <div className={s.cardHeaderText}>
-              <p className={s.cardEyebrow}>Умные задачи и совет дня</p>
               <h2 id="personalization-heading" className={s.cardTitle}>
                 Персонализация
               </h2>
@@ -488,6 +492,7 @@ export default function ProfilePage() {
                   onClick={() => {
                     setPersNote(user?.personalization_note?.trim() ?? '')
                     setPersChrono((user?.chronotype ?? '').trim().toLowerCase())
+                    setPersTz((user?.timezone ?? '').trim() || DEFAULT_TIMEZONE)
                     setPersonalizationOpen(true)
                   }}
                 >
@@ -513,6 +518,40 @@ export default function ProfilePage() {
                     {persNote.length}/280
                   </span>
                 </label>
+                <div className={s.field}>
+                  <label className={s.fieldLabel} htmlFor="pers-tz">Часовой пояс</label>
+                  <select
+                    id="pers-tz"
+                    className={s.fieldSelect}
+                    value={persTz}
+                    onChange={(e) => setPersTz(e.target.value)}
+                  >
+                    {!TIMEZONE_OPTIONS.some((o) => o.value === persTz) && persTz ? (
+                      <option value={persTz}>{persTz}</option>
+                    ) : null}
+                    {TIMEZONE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  {(() => {
+                    const detected = detectBrowserTimezone()
+                    if (!detected || detected === persTz) return null
+                    return (
+                      <div className={s.tzDetectRow}>
+                        <span className={s.hintMuted}>Ваше устройство: {timezoneLabel(detected)}</span>
+                        <button
+                          type="button"
+                          className={s.chronotypeBtn}
+                          onClick={() => setPersTz(detected)}
+                        >
+                          Использовать
+                        </button>
+                      </div>
+                    )
+                  })()}
+                </div>
                 <div className={s.field}>
                   <span className={s.fieldLabel}>Когда вы лучше соображаете</span>
                   <div className={s.chronotypeGrid} role="group" aria-label="Пик бодрости">
@@ -613,7 +652,6 @@ export default function ProfilePage() {
                 <i className={`fa-solid fa-chart-simple ${s.faCardIcon}`} />
               </span>
               <div className={s.cardHeaderText}>
-                <p className={s.cardEyebrow}>Прогресс</p>
                 <h2 id="stats-heading" className={s.cardTitle}>
                   Статистика
                 </h2>
@@ -668,9 +706,8 @@ export default function ProfilePage() {
               <i className={`fa-solid fa-ticket ${s.faCardIcon}`} />
             </span>
             <div className={s.cardHeaderText}>
-              <p className={s.cardEyebrow}>Тариф</p>
               <h2 id="promo-heading" className={s.cardTitle}>
-                Промокод Pro
+                Тариф
               </h2>
             </div>
           </div>
@@ -679,7 +716,7 @@ export default function ProfilePage() {
             {user?.plan === 'pro' ? (
               <p className={s.promoProBadge}>
                 <i className="fa-solid fa-circle-check" aria-hidden />
-                У вас тариф Pro — 30 умных задач в день.
+                У вас тариф Pro — {quota?.limit ?? 30} умных задач в день.
                 {quotaLow && quota ? ` Осталось: ${quota.limit - quota.used}.` : ''}
               </p>
             ) : (
@@ -780,7 +817,6 @@ function WeeklyReportSection({ accessToken }: { accessToken: string | null }) {
           <i className={`fa-solid fa-chart-bar ${s.faCardIcon}`} />
         </span>
         <div className={s.cardHeaderText}>
-          <p className={s.cardEyebrow}>Аналитика</p>
           <h2 id="weekly-heading" className={s.cardTitle}>
             Отчёт за неделю
             {report ? <span className={s.weeklyLabel}>{report.week_label}</span> : null}

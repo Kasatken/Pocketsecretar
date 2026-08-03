@@ -6,7 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -45,7 +47,15 @@ func main() {
 	auth := handlers.NewAuthHandler(users, tokens, cfg, smartTaskQuota, calendarCompletions)
 	googleOAuth := handlers.NewGoogleOAuthHandler(cfg, googleLinks, tokens)
 	calendarEvents := handlers.NewCalendarEventsHandler(cfg, googleLinks, users, calendarCompletions)
-	smartTask := handlers.NewSmartTaskHandler(cfg, googleLinks, smartTaskQuota, users)
+	smartTaskJobs := repository.NewSmartTaskJobRepository(db)
+	// Горутины pending/running job погибли вместе с прошлым процессом — сразу отдаём
+	// поллингу ошибку «повторите запрос» вместо двухминутного таймаута на фронте.
+	if n, err := smartTaskJobs.FailOrphaned(context.Background()); err != nil {
+		log.Printf("smart-task jobs: fail orphaned: %v", err)
+	} else if n > 0 {
+		log.Printf("smart-task jobs: помечено failed после рестарта: %d", n)
+	}
+	smartTask := handlers.NewSmartTaskHandler(cfg, googleLinks, smartTaskQuota, users, smartTaskJobs)
 	dailyAdvice := handlers.NewDailyAdviceHandler(cfg, googleLinks, users, dailyAdviceCache)
 	backlog := handlers.NewBacklogIdeasHandler(cfg, googleLinks, backlogIdeas)
 	collabRepo := repository.NewCollabRepository(db)
@@ -98,11 +108,47 @@ func main() {
 	mux.Handle("POST /api/spaces/{id}/proposals", middleware.RequireAuth(tokens, http.HandlerFunc(collab.CreateProposal)))
 	mux.Handle("POST /api/spaces/{id}/proposals/{proposalId}/respond", middleware.RequireAuth(tokens, http.HandlerFunc(collab.RespondProposal)))
 
+	// Очистка завершённых smart-task job (раньше — горутина с time.Sleep на каждый job в памяти).
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			if n, err := smartTaskJobs.DeleteExpired(ctx); err != nil {
+				log.Printf("smart-task jobs cleanup: %v", err)
+			} else if n > 0 {
+				log.Printf("smart-task jobs cleanup: removed %d", n)
+			}
+			cancel()
+		}
+	}()
+
 	addr := "127.0.0.1:" + cfg.Port
 
-	log.Printf("listening on %s", addr)
-	if err := http.ListenAndServe(addr, middleware.CORS(cfg.AllowedOrigin, mux)); err != nil {
-		log.Fatal(err)
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           middleware.CORS(cfg.AllowedOrigin, mux),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	go func() {
+		log.Printf("listening on %s", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	}()
+
+	// Graceful shutdown: на SIGTERM/SIGINT перестаём принимать соединения и даём
+	// текущим запросам дозавершиться, чтобы деплой не обрывал ответы на полуслове.
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+
+	log.Printf("shutting down…")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("shutdown: %v", err)
 	}
 }
 
