@@ -62,6 +62,7 @@ func main() {
 	collab := handlers.NewCollabHandler(cfg, googleLinks, users, collabRepo)
 	weeklyRepo := repository.NewWeeklyReportRepository(db)
 	weeklyReport := handlers.NewWeeklyReportHandler(cfg, users, googleLinks, calendarCompletions, smartTaskQuota, weeklyRepo)
+	focusRepo := repository.NewFocusRepository(db)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", handlers.Health)
@@ -107,6 +108,43 @@ func main() {
 	mux.Handle("GET /api/spaces/{id}/proposals", middleware.RequireAuth(tokens, http.HandlerFunc(collab.ListProposals)))
 	mux.Handle("POST /api/spaces/{id}/proposals", middleware.RequireAuth(tokens, http.HandlerFunc(collab.CreateProposal)))
 	mux.Handle("POST /api/spaces/{id}/proposals/{proposalId}/respond", middleware.RequireAuth(tokens, http.HandlerFunc(collab.RespondProposal)))
+
+	// Бот поднимается только при полном комплекте настроек: без секрета вебхук принимал бы
+	// апдейты от кого угодно, без имени бота не собрать диплинк для кнопки «Я тоже».
+	if cfg.TelegramBotToken != "" && cfg.TelegramWebhookSecret != "" && cfg.TelegramBotUsername != "" {
+		telegram := handlers.NewTelegramHandler(cfg, users, focusRepo)
+		mux.Handle("POST /api/tg/webhook", telegram)
+
+		// Расписание сессий: напоминание, старт и итог. Состояние в БД, поэтому
+		// перезапуск процесса не теряет ни одной назначенной сессии.
+		go func() {
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
+			for range ticker.C {
+				ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+				telegram.Tick(ctx)
+				cancel()
+			}
+		}()
+
+		// Черновики без выбранного времени накапливаются от брошенных диалогов.
+		go func() {
+			ticker := time.NewTicker(6 * time.Hour)
+			defer ticker.Stop()
+			for range ticker.C {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				if n, err := focusRepo.DeleteStaleDrafts(ctx); err != nil {
+					log.Printf("focus drafts cleanup: %v", err)
+				} else if n > 0 {
+					log.Printf("focus drafts cleanup: removed %d", n)
+				}
+				cancel()
+			}
+		}()
+		log.Printf("telegram bot: вебхук на /api/tg/webhook, бот @%s", cfg.TelegramBotUsername)
+	} else {
+		log.Printf("telegram bot: выключен (нужны TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME, TELEGRAM_WEBHOOK_SECRET)")
+	}
 
 	// Очистка завершённых smart-task job (раньше — горутина с time.Sleep на каждый job в памяти).
 	go func() {

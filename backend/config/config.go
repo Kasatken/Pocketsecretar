@@ -56,6 +56,14 @@ type Config struct {
 	// ProPromoCode — секретная строка; при совпадении POST /api/auth/me/promo выставляет пользователю plan=pro.
 	ProPromoCode string
 
+	// TelegramBotToken — токен из BotFather. Пустой отключает бота целиком (вебхук не регистрируется).
+	TelegramBotToken string
+	// TelegramBotUsername — имя бота без @; из него собираются диплинки t.me/<username>?start=<token>.
+	TelegramBotUsername string
+	// TelegramWebhookSecret — значение заголовка X-Telegram-Bot-Api-Secret-Token.
+	// Обязателен: без него вебхук не поднимается, иначе апдейты может подделать кто угодно.
+	TelegramWebhookSecret string
+
 	UploadDir      string
 	AvatarMaxBytes int64
 
@@ -91,6 +99,10 @@ func Load() Config {
 		FreeAdviceRefreshPerHour: getEnvInt("FREE_ADVICE_REFRESH_PER_HOUR", 5),
 		ProAdviceRefreshPerHour:  getEnvInt("PRO_ADVICE_REFRESH_PER_HOUR", 20),
 		ProPromoCode:       strings.TrimSpace(os.Getenv("PRO_PROMO_CODE")),
+
+		TelegramBotToken:      strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")),
+		TelegramBotUsername:   strings.TrimPrefix(strings.TrimSpace(os.Getenv("TELEGRAM_BOT_USERNAME")), "@"),
+		TelegramWebhookSecret: strings.TrimSpace(os.Getenv("TELEGRAM_WEBHOOK_SECRET")),
 
 		UploadDir:          getEnv("UPLOAD_DIR", "./uploads"),
 		AvatarMaxBytes:     int64(getEnvInt("AVATAR_MAX_BYTES", 2_000_000)),

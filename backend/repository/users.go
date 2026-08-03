@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/lib/pq"
@@ -89,6 +90,47 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models
 	return u, nil
 }
 
+func (r *UserRepository) FindByTelegramID(ctx context.Context, telegramID int64) (*models.User, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT id, email, password_hash, display_name, avatar_url, bio,
+			personalization_note, chronotype, timezone,
+			experience_points, level, plan, created_at, updated_at, last_login_at
+		FROM users WHERE telegram_id = $1
+	`, telegramID)
+	u, err := scanUser(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return u, nil
+}
+
+// CreateTelegram заводит пользователя, пришедшего из бота. email и password_hash в схеме
+// NOT NULL, поэтому заполняются синтетически: войти паролем в такой аккаунт нельзя —
+// пустой хеш не совпадёт ни с одним паролем. invitedBy и joinSource нужны для k-фактора.
+// При гонке двух /start возвращает ErrUserExists — вызывающему следует перечитать по telegram_id.
+func (r *UserRepository) CreateTelegram(ctx context.Context, telegramID int64, username, displayName string, invitedBy *int64, joinSource string) (*models.User, error) {
+	email := fmt.Sprintf("tg%d@telegram.local", telegramID)
+	row := r.db.QueryRowContext(ctx, `
+		INSERT INTO users (email, password_hash, display_name, telegram_id, telegram_username, invited_by, join_source)
+		VALUES ($1, '', $2, $3, $4, $5, $6)
+		RETURNING id, email, password_hash, display_name, avatar_url, bio,
+			personalization_note, chronotype, timezone,
+			experience_points, level, plan, created_at, updated_at, last_login_at
+	`, email, displayName, telegramID, username, invitedBy, joinSource)
+	u, err := scanUser(row)
+	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			return nil, ErrUserExists
+		}
+		return nil, err
+	}
+	return u, nil
+}
+
 func (r *UserRepository) FindByID(ctx context.Context, id int64) (*models.User, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, email, password_hash, display_name, avatar_url, bio,
@@ -104,6 +146,20 @@ func (r *UserRepository) FindByID(ctx context.Context, id int64) (*models.User, 
 		return nil, err
 	}
 	return u, nil
+}
+
+// TelegramIDByUserID возвращает telegram_id пользователя; 0 — если аккаунт заведён не из бота
+// (тогда написать ему в личку нельзя).
+func (r *UserRepository) TelegramIDByUserID(ctx context.Context, userID int64) (int64, error) {
+	var id sql.NullInt64
+	err := r.db.QueryRowContext(ctx, `SELECT telegram_id FROM users WHERE id = $1`, userID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return id.Int64, nil
 }
 
 func (r *UserRepository) TouchLogin(ctx context.Context, userID int64) error {
