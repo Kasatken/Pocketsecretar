@@ -6,3 +6,8 @@ frontend/dist
 *.log
 .env
 .env.*
+
+# Секреты и локальные настройки
+deploy/pocketsecret.env
+.claude/
+.vscode/
