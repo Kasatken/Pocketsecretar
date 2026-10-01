@@ -11,3 +11,4 @@ frontend/dist
 deploy/pocketsecret.env
 .claude/
 .vscode/
+backups/
